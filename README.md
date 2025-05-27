@@ -90,13 +90,13 @@ This phase focuses on implementing the fundamental shape drawing algorithms.
 - [x] **Task 17: Implement Modified Midpoint Circle Algorithm**
     - Create a function to draw a circle using a modified Midpoint circle algorithm.
 
-- [ ] **Task 18: Implement Ellipse Direct Algorithm**
+- [x] **Task 18: Implement Ellipse Direct Algorithm**
     - Create a function to draw an ellipse using the direct method.
 
-- [ ] **Task 19: Implement Ellipse Polar Algorithm**
+- [x] **Task 19: Implement Ellipse Polar Algorithm**
     - Create a function to draw an ellipse using polar coordinates.
 
-- [ ] **Task 20: Implement Ellipse Midpoint Algorithm**
+- [x] **Task 20: Implement Ellipse Midpoint Algorithm**
     - Create a function to draw an ellipse using the Midpoint ellipse algorithm.
 
 ---
