@@ -6,6 +6,7 @@
 #include <string>
 #include <memory>
 #include <cmath>
+#include "LineAlgorithms.h"
 
 // ========================================
 // CONSTANTS AND DEFINITIONS
@@ -22,6 +23,9 @@
 #define MENU_FILE_EXIT        1004
 
 #define MENU_SHAPES_LINE      2001
+#define MENU_SHAPES_LINE_DDA      2011
+#define MENU_SHAPES_LINE_BRESENHAM 2012
+#define MENU_SHAPES_LINE_PARAMETRIC 2013
 #define MENU_SHAPES_CIRCLE    2002
 #define MENU_SHAPES_ELLIPSE   2003
 #define MENU_SHAPES_POLYGON   2004
@@ -44,7 +48,7 @@
 // Drawing modes
 enum class DrawingMode {
     LINE_DDA,
-    LINE_MIDPOINT,
+    LINE_BRESENHAM,
     LINE_PARAMETRIC,
     CIRCLE_DIRECT,
     CIRCLE_POLAR,
@@ -208,7 +212,7 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     wc.hbrBackground = CreateSolidBrush(m_backgroundColor);
     wc.lpszClassName = s_className;
     wc.hCursor = LoadCursor(NULL, IDC_CROSS);  // Custom cursor for drawing
-    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;  // Add CS_OWNDC for better performance
 
     if (!RegisterClass(&wc)) {
         return false;
@@ -253,7 +257,14 @@ void GraphicsWindow::InitializeMenus() {
 
     // Shapes menu
     HMENU hShapesMenu = CreatePopupMenu();
-    AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_LINE, "Line (DDA)");
+    
+    // Line submenu
+    HMENU hLineMenu = CreatePopupMenu();
+    AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_DDA, "DDA Algorithm");
+    AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_BRESENHAM, "Bresenham (Midpoint)");
+    AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_PARAMETRIC, "Parametric");
+    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hLineMenu, "Line");
+    
     AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_CIRCLE, "Circle (Midpoint)");
     AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_ELLIPSE, "Ellipse");
     AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
@@ -364,6 +375,8 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             std::string modeText = "Current mode: ";
             switch (m_currentDrawingMode) {
                 case DrawingMode::LINE_DDA: modeText += "Line (DDA)"; break;
+                case DrawingMode::LINE_BRESENHAM: modeText += "Line (Bresenham)"; break;
+                case DrawingMode::LINE_PARAMETRIC: modeText += "Line (Parametric)"; break;
                 case DrawingMode::CIRCLE_MIDPOINT: modeText += "Circle (Midpoint)"; break;
                 case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse"; break;
                 case DrawingMode::POLYGON: modeText += "Polygon"; break;
@@ -421,6 +434,8 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
 
     switch (m_currentDrawingMode) {
         case DrawingMode::LINE_DDA:
+        case DrawingMode::LINE_BRESENHAM:
+        case DrawingMode::LINE_PARAMETRIC:
         {
             if (!m_isDrawing) {
                 // Start line
@@ -487,11 +502,26 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
 
 // Handle mouse move
 void GraphicsWindow::HandleMouseMove(int x, int y) {
-    m_lastMousePos = Point(x, y);
+    Point newPos(x, y);
+    
+    // Only update if mouse actually moved (reduce unnecessary redraws)
+    if (newPos.x != m_lastMousePos.x || newPos.y != m_lastMousePos.y) {
+        m_lastMousePos = newPos;
 
-    // For preview drawing while creating shapes
-    if (m_isDrawing) {
-        InvalidateRect(m_hwnd, NULL, TRUE);
+        // For preview drawing while creating shapes
+        if (m_isDrawing) {
+            // Only invalidate a small region around the preview line instead of the whole window
+            RECT invalidRect;
+            if (!m_currentPoints.empty()) {
+                                 int minX = std::min(m_currentPoints[0].x, m_lastMousePos.x) - 5;
+                int maxX = std::max(m_currentPoints[0].x, m_lastMousePos.x) + 5;
+                int minY = std::min(m_currentPoints[0].y, m_lastMousePos.y) - 5;
+                int maxY = std::max(m_currentPoints[0].y, m_lastMousePos.y) + 5;
+                
+                SetRect(&invalidRect, minX, minY, maxX, maxY);
+                InvalidateRect(m_hwnd, &invalidRect, TRUE);
+            }
+        }
     }
 }
 
@@ -506,8 +536,16 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
             PostMessage(m_hwnd, WM_CLOSE, 0, 0);
             break;
 
-        case MENU_SHAPES_LINE:
+        case MENU_SHAPES_LINE_DDA:
             SetDrawingMode(DrawingMode::LINE_DDA);
+            break;
+
+        case MENU_SHAPES_LINE_BRESENHAM:
+            SetDrawingMode(DrawingMode::LINE_BRESENHAM);
+            break;
+
+        case MENU_SHAPES_LINE_PARAMETRIC:
+            SetDrawingMode(DrawingMode::LINE_PARAMETRIC);
             break;
 
         case MENU_SHAPES_CIRCLE:
@@ -548,17 +586,42 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
     }
 }
 
-// Redraw all shapes (placeholder - drawing algorithms will be implemented later)
+// Redraw all shapes using implemented algorithms
 void GraphicsWindow::RedrawAll() {
     HDC hdc = GetDC(m_hwnd);
 
-    // TODO: Draw all saved shapes using drawing algorithms
-    // This will be implemented when drawing algorithms are added
+    // Draw all saved shapes using their respective algorithms
+    for (const auto& shape : m_shapes) {
+        if (shape.points.size() >= 2) {
+            switch (shape.mode) {
+                case DrawingMode::LINE_DDA:
+                    DrawLineDDA(hdc, shape.points[0].x, shape.points[0].y,
+                               shape.points[1].x, shape.points[1].y, shape.color);
+                    break;
+                    
+                case DrawingMode::LINE_BRESENHAM:
+                    DrawLineBresenham(hdc, shape.points[0].x, shape.points[0].y,
+                                     shape.points[1].x, shape.points[1].y, shape.color);
+                    break;
+                    
+                case DrawingMode::LINE_PARAMETRIC:
+                    DrawLineParametric(hdc, shape.points[0].x, shape.points[0].y,
+                                      shape.points[1].x, shape.points[1].y, shape.color);
+                    break;
+                    
+                default:
+                    // TODO: Implement other shape algorithms
+                    break;
+            }
+        }
+    }
 
     // Draw current shape being created (basic preview for now)
     if (m_isDrawing && !m_currentPoints.empty()) {
         switch (m_currentDrawingMode) {
             case DrawingMode::LINE_DDA:
+            case DrawingMode::LINE_BRESENHAM:
+            case DrawingMode::LINE_PARAMETRIC:
                 if (m_currentPoints.size() == 1) {
                     // Draw preview line to mouse cursor
                     HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
