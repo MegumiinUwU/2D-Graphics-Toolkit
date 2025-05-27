@@ -7,6 +7,8 @@
 #include <memory>
 #include <cmath>
 #include "LineAlgorithms.h"
+#include "CircleAlgorithms.h"
+
 
 // ========================================
 // CONSTANTS AND DEFINITIONS
@@ -27,6 +29,11 @@
 #define MENU_SHAPES_LINE_BRESENHAM 2012
 #define MENU_SHAPES_LINE_PARAMETRIC 2013
 #define MENU_SHAPES_CIRCLE    2002
+#define MENU_SHAPES_CIRCLE_DIRECT    2021
+#define MENU_SHAPES_CIRCLE_POLAR     2022
+#define MENU_SHAPES_CIRCLE_ITERATIVE 2023
+#define MENU_SHAPES_CIRCLE_MIDPOINT  2024
+#define MENU_SHAPES_CIRCLE_MODIFIED  2025
 #define MENU_SHAPES_ELLIPSE   2003
 #define MENU_SHAPES_POLYGON   2004
 
@@ -265,7 +272,15 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_PARAMETRIC, "Parametric");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hLineMenu, "Line");
     
-    AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_CIRCLE, "Circle (Midpoint)");
+    // Circle submenu
+    HMENU hCircleMenu = CreatePopupMenu();
+    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_DIRECT, "Direct Algorithm");
+    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_POLAR, "Polar Algorithm");
+    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_ITERATIVE, "Iterative Polar");
+    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_MIDPOINT, "Midpoint (Bresenham)");
+    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_MODIFIED, "Modified Midpoint");
+    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCircleMenu, "Circle");
+    
     AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_ELLIPSE, "Ellipse");
     AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapesMenu, "Shapes");
@@ -377,7 +392,11 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case DrawingMode::LINE_DDA: modeText += "Line (DDA)"; break;
                 case DrawingMode::LINE_BRESENHAM: modeText += "Line (Bresenham)"; break;
                 case DrawingMode::LINE_PARAMETRIC: modeText += "Line (Parametric)"; break;
+                case DrawingMode::CIRCLE_DIRECT: modeText += "Circle (Direct)"; break;
+                case DrawingMode::CIRCLE_POLAR: modeText += "Circle (Polar)"; break;
+                case DrawingMode::CIRCLE_ITERATIVE_POLAR: modeText += "Circle (Iterative Polar)"; break;
                 case DrawingMode::CIRCLE_MIDPOINT: modeText += "Circle (Midpoint)"; break;
+                case DrawingMode::CIRCLE_MODIFIED_MIDPOINT: modeText += "Circle (Modified Midpoint)"; break;
                 case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse"; break;
                 case DrawingMode::POLYGON: modeText += "Polygon"; break;
                 default: modeText += "None"; break;
@@ -461,7 +480,11 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
         }
             break;
 
+        case DrawingMode::CIRCLE_DIRECT:
+        case DrawingMode::CIRCLE_POLAR:
+        case DrawingMode::CIRCLE_ITERATIVE_POLAR:
         case DrawingMode::CIRCLE_MIDPOINT:
+        case DrawingMode::CIRCLE_MODIFIED_MIDPOINT:
         {
             if (!m_isDrawing) {
                 // Start circle (center point)
@@ -548,8 +571,24 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
             SetDrawingMode(DrawingMode::LINE_PARAMETRIC);
             break;
 
-        case MENU_SHAPES_CIRCLE:
+        case MENU_SHAPES_CIRCLE_DIRECT:
+            SetDrawingMode(DrawingMode::CIRCLE_DIRECT);
+            break;
+
+        case MENU_SHAPES_CIRCLE_POLAR:
+            SetDrawingMode(DrawingMode::CIRCLE_POLAR);
+            break;
+
+        case MENU_SHAPES_CIRCLE_ITERATIVE:
+            SetDrawingMode(DrawingMode::CIRCLE_ITERATIVE_POLAR);
+            break;
+
+        case MENU_SHAPES_CIRCLE_MIDPOINT:
             SetDrawingMode(DrawingMode::CIRCLE_MIDPOINT);
+            break;
+
+        case MENU_SHAPES_CIRCLE_MODIFIED:
+            SetDrawingMode(DrawingMode::CIRCLE_MODIFIED_MIDPOINT);
             break;
 
         case MENU_SHAPES_ELLIPSE:
@@ -609,6 +648,56 @@ void GraphicsWindow::RedrawAll() {
                                       shape.points[1].x, shape.points[1].y, shape.color);
                     break;
                     
+                case DrawingMode::CIRCLE_DIRECT:
+                {
+                    int radius = (int)sqrt(
+                        pow(shape.points[1].x - shape.points[0].x, 2) +
+                        pow(shape.points[1].y - shape.points[0].y, 2)
+                    );
+                    DrawCircle1(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                }
+                    break;
+                    
+                case DrawingMode::CIRCLE_POLAR:
+                {
+                    int radius = (int)sqrt(
+                        pow(shape.points[1].x - shape.points[0].x, 2) +
+                        pow(shape.points[1].y - shape.points[0].y, 2)
+                    );
+                    DrawCircle2(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                }
+                    break;
+                    
+                case DrawingMode::CIRCLE_ITERATIVE_POLAR:
+                {
+                    int radius = (int)sqrt(
+                        pow(shape.points[1].x - shape.points[0].x, 2) +
+                        pow(shape.points[1].y - shape.points[0].y, 2)
+                    );
+                    DrawCircle3(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                }
+                    break;
+                    
+                case DrawingMode::CIRCLE_MIDPOINT:
+                {
+                    int radius = (int)sqrt(
+                        pow(shape.points[1].x - shape.points[0].x, 2) +
+                        pow(shape.points[1].y - shape.points[0].y, 2)
+                    );
+                    DrawCircleBresenham(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                }
+                    break;
+                    
+                case DrawingMode::CIRCLE_MODIFIED_MIDPOINT:
+                {
+                    int radius = (int)sqrt(
+                        pow(shape.points[1].x - shape.points[0].x, 2) +
+                        pow(shape.points[1].y - shape.points[0].y, 2)
+                    );
+                    DrawCircleDDA1(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                }
+                    break;
+                    
                 default:
                     // TODO: Implement other shape algorithms
                     break;
@@ -635,7 +724,11 @@ void GraphicsWindow::RedrawAll() {
                 }
                 break;
 
+            case DrawingMode::CIRCLE_DIRECT:
+            case DrawingMode::CIRCLE_POLAR:
+            case DrawingMode::CIRCLE_ITERATIVE_POLAR:
             case DrawingMode::CIRCLE_MIDPOINT:
+            case DrawingMode::CIRCLE_MODIFIED_MIDPOINT:
                 if (m_currentPoints.size() == 1) {
                     // Draw preview circle using Windows API for now
                     int radius = (int)sqrt(

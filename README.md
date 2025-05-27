@@ -10,12 +10,12 @@ This document outlines the tasks required to implement a 2D drawing program in C
 
 This phase focuses on setting up the basic window and user interaction.
 
-- [ ] **Task 1: Create Window & Set Background**
+- [x] **Task 1: Create Window & Set Background**
     - Create a window for your drawing program.
     - Implement a function to set the background color to white.
     - *Integration:* This forms the canvas for all subsequent drawing operations.
 
-- [ ] **Task 2: Customize Mouse Cursor**
+- [x] **Task 2: Customize Mouse Cursor**
     - Research and implement a method to change the default mouse cursor shape.
 
 - [ ] **Task 3: Implement Mouse-Only Interaction**
@@ -66,28 +66,28 @@ This phase focuses on creating the user interface for selecting options.
 
 This phase focuses on implementing the fundamental shape drawing algorithms.
 
-- [ ] **Task 10: Implement DDA Line Algorithm**
+- [x] **Task 10: Implement DDA Line Algorithm**
     - Create a function to draw a line using the DDA algorithm.
 
-- [ ] **Task 11: Implement Midpoint Line Algorithm**
+- [x] **Task 11: Implement Midpoint Line Algorithm**
     - Create a function to draw a line using the Midpoint line algorithm.
 
-- [ ] **Task 12: Implement Parametric Line Algorithm**
+- [x] **Task 12: Implement Parametric Line Algorithm**
     - Create a function to draw a line using a parametric equation.
 
-- [ ] **Task 13: Implement Direct Circle Algorithm**
+- [x] **Task 13: Implement Direct Circle Algorithm**
     - Create a function to draw a circle using the direct method.
 
-- [ ] **Task 14: Implement Polar Circle Algorithm**
+- [x] **Task 14: Implement Polar Circle Algorithm**
     - Create a function to draw a circle using polar coordinates.
 
-- [ ] **Task 15: Implement Iterative Polar Circle Algorithm**
+- [x] **Task 15: Implement Iterative Polar Circle Algorithm**
     - Create a function to draw a circle using an iterative polar approach.
 
-- [ ] **Task 16: Implement Midpoint Circle Algorithm**
+- [x] **Task 16: Implement Midpoint Circle Algorithm**
     - Create a function to draw a circle using the Midpoint circle algorithm.
 
-- [ ] **Task 17: Implement Modified Midpoint Circle Algorithm**
+- [x] **Task 17: Implement Modified Midpoint Circle Algorithm**
     - Create a function to draw a circle using a modified Midpoint circle algorithm.
 
 - [ ] **Task 18: Implement Ellipse Direct Algorithm**
