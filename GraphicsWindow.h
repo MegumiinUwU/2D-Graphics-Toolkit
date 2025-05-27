@@ -8,6 +8,7 @@
 #include <cmath>
 #include "LineAlgorithms.h"
 #include "CircleAlgorithms.h"
+#include "EllipseAlgorithms.h"
 
 
 // ========================================
@@ -35,6 +36,9 @@
 #define MENU_SHAPES_CIRCLE_MIDPOINT  2024
 #define MENU_SHAPES_CIRCLE_MODIFIED  2025
 #define MENU_SHAPES_ELLIPSE   2003
+#define MENU_SHAPES_ELLIPSE_DIRECT   2031
+#define MENU_SHAPES_ELLIPSE_POLAR    2032
+#define MENU_SHAPES_ELLIPSE_MIDPOINT 2033
 #define MENU_SHAPES_POLYGON   2004
 
 #define MENU_COLORS_RED       3001
@@ -281,7 +285,13 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_MODIFIED, "Modified Midpoint");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCircleMenu, "Circle");
     
-    AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_ELLIPSE, "Ellipse");
+    // Ellipse submenu
+    HMENU hEllipseMenu = CreatePopupMenu();
+    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_DIRECT, "Direct Algorithm");
+    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");
+    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");
+    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");
+    
     AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapesMenu, "Shapes");
 
@@ -397,7 +407,9 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case DrawingMode::CIRCLE_ITERATIVE_POLAR: modeText += "Circle (Iterative Polar)"; break;
                 case DrawingMode::CIRCLE_MIDPOINT: modeText += "Circle (Midpoint)"; break;
                 case DrawingMode::CIRCLE_MODIFIED_MIDPOINT: modeText += "Circle (Modified Midpoint)"; break;
-                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse"; break;
+                case DrawingMode::ELLIPSE_DIRECT: modeText += "Ellipse (Direct)"; break;
+                case DrawingMode::ELLIPSE_POLAR: modeText += "Ellipse (Polar)"; break;
+                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse (Midpoint)"; break;
                 case DrawingMode::POLYGON: modeText += "Polygon"; break;
                 default: modeText += "None"; break;
             }
@@ -510,6 +522,34 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
         }
             break;
 
+        case DrawingMode::ELLIPSE_DIRECT:
+        case DrawingMode::ELLIPSE_POLAR:
+        case DrawingMode::ELLIPSE_MIDPOINT:
+        {
+            if (!m_isDrawing) {
+                // Start ellipse (center point)
+                m_currentPoints.clear();
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;
+            } else {
+                // Finish ellipse (radius point)
+                m_currentPoints.push_back(newPoint);
+
+                Shape shape;
+                shape.mode = m_currentDrawingMode;
+                shape.color = m_currentColor;
+                shape.fillMode = m_currentFillMode;
+                shape.points = m_currentPoints;
+                shape.thickness = m_lineThickness;
+                m_shapes.push_back(shape);
+
+                m_isDrawing = false;
+                m_currentPoints.clear();
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+        }
+            break;
+
         case DrawingMode::POLYGON:
         {
             if (!m_isDrawing) {
@@ -591,7 +631,15 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
             SetDrawingMode(DrawingMode::CIRCLE_MODIFIED_MIDPOINT);
             break;
 
-        case MENU_SHAPES_ELLIPSE:
+        case MENU_SHAPES_ELLIPSE_DIRECT:
+            SetDrawingMode(DrawingMode::ELLIPSE_DIRECT);
+            break;
+
+        case MENU_SHAPES_ELLIPSE_POLAR:
+            SetDrawingMode(DrawingMode::ELLIPSE_POLAR);
+            break;
+
+        case MENU_SHAPES_ELLIPSE_MIDPOINT:
             SetDrawingMode(DrawingMode::ELLIPSE_MIDPOINT);
             break;
 
@@ -698,6 +746,30 @@ void GraphicsWindow::RedrawAll() {
                 }
                     break;
                     
+                case DrawingMode::ELLIPSE_DIRECT:
+                {
+                    int radiusX = abs(shape.points[1].x - shape.points[0].x);
+                    int radiusY = abs(shape.points[1].y - shape.points[0].y);
+                    DrawEllipse1(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+                }
+                    break;
+                    
+                case DrawingMode::ELLIPSE_POLAR:
+                {
+                    int radiusX = abs(shape.points[1].x - shape.points[0].x);
+                    int radiusY = abs(shape.points[1].y - shape.points[0].y);
+                    DrawEllipse2(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+                }
+                    break;
+                    
+                case DrawingMode::ELLIPSE_MIDPOINT:
+                {
+                    int radiusX = abs(shape.points[1].x - shape.points[0].x);
+                    int radiusY = abs(shape.points[1].y - shape.points[0].y);
+                    DrawEllipseBresenham(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+                }
+                    break;
+                    
                 default:
                     // TODO: Implement other shape algorithms
                     break;
@@ -743,6 +815,28 @@ void GraphicsWindow::RedrawAll() {
                     Ellipse(hdc,
                             m_currentPoints[0].x - radius, m_currentPoints[0].y - radius,
                             m_currentPoints[0].x + radius, m_currentPoints[0].y + radius);
+
+                    SelectObject(hdc, oldPen);
+                    SelectObject(hdc, oldBrush);
+                    DeleteObject(tempPen);
+                }
+                break;
+
+            case DrawingMode::ELLIPSE_DIRECT:
+            case DrawingMode::ELLIPSE_POLAR:
+            case DrawingMode::ELLIPSE_MIDPOINT:
+                if (m_currentPoints.size() == 1) {
+                    // Draw preview ellipse using Windows API for now
+                    int radiusX = abs(m_lastMousePos.x - m_currentPoints[0].x);
+                    int radiusY = abs(m_lastMousePos.y - m_currentPoints[0].y);
+
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+                    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+                    Ellipse(hdc,
+                            m_currentPoints[0].x - radiusX, m_currentPoints[0].y - radiusY,
+                            m_currentPoints[0].x + radiusX, m_currentPoints[0].y + radiusY);
 
                     SelectObject(hdc, oldPen);
                     SelectObject(hdc, oldBrush);
