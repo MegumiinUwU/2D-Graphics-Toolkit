@@ -105,10 +105,10 @@ This phase focuses on implementing the fundamental shape drawing algorithms.
 
 This phase focuses on implementing various shape-filling techniques.
 
-- [ ] **Task 21: Implement Circle Filling with Lines**
+- [x] **Task 21: Implement Circle Filling with Lines**
     - Allow user to select a quarter of a circle.
 
-- [ ] **Task 22: Implement Circle Filling with Circles**
+- [x] **Task 22: Implement Circle Filling with Circles**
     - Allow user to select a quarter of a circle.
 
 - [ ] **Task 23: Implement Square Filling with Hermite Curve (Vertical)**
@@ -119,16 +119,16 @@ This phase focuses on implementing various shape-filling techniques.
     - Allow user to draw a rectangle.
     - Fill the rectangle with horizontal Bezier curves.
 
-- [ ] **Task 25: Implement Convex Filling Algorithm**
+- [x] **Task 25: Implement Convex Filling Algorithm**
     - Implement a scan-line filling algorithm for convex polygons.
 
-- [ ] **Task 26: Implement Non-Convex Filling Algorithm**
+- [x] **Task 26: Implement Non-Convex Filling Algorithm**
     - Implement a scan-line filling algorithm for non-convex polygons.
 
-- [ ] **Task 27: Implement Recursive Flood Fill**
+- [x] **Task 27: Implement Recursive Flood Fill**
     - Implement a recursive flood fill algorithm.
 
-- [ ] **Task 28: Implement Non-Recursive Flood Fill**
+- [x] **Task 28: Implement Non-Recursive Flood Fill**
     - Implement a non-recursive flood fill algorithm (stack/queue).
 
 ---

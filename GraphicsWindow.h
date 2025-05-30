@@ -10,6 +10,7 @@
 #include "CircleAlgorithms.h"
 #include "EllipseAlgorithms.h"
 #include "CircleFillAlgorithms.h"
+#include "PolygonFillAlgorithms.h"
 
 
 // ========================================
@@ -59,6 +60,10 @@
 #define MENU_FILL_CIRCLE_LINES     4051
 #define MENU_FILL_CIRCLE_QUARTER   4052  
 #define MENU_FILL_CIRCLE_CIRCLES   4053
+#define MENU_FILL_POLYGON_CONVEX   4054
+#define MENU_FILL_POLYGON_NONCONVEX 4055
+#define MENU_FILL_FLOOD_RECURSIVE  4056
+#define MENU_FILL_FLOOD_NONRECURSIVE 4057
 
 #define MENU_TOOLS_CLEAR      5001
 #define MENU_TOOLS_ZOOM_IN    5002
@@ -92,7 +97,11 @@ enum class FillMode {
     SCANLINE_NON_CONVEX,
     CIRCLE_FILL_LINES,
     CIRCLE_FILL_QUARTER,
-    CIRCLE_FILL_CIRCLES
+    CIRCLE_FILL_CIRCLES,
+    POLYGON_CONVEX_FILL,
+    POLYGON_NONCONVEX_FILL,
+    FLOOD_FILL_RECURSIVE_POLYGON,
+    FLOOD_FILL_NONRECURSIVE_POLYGON
 };
 
 // Point structure for coordinates
@@ -141,6 +150,10 @@ private:
     bool m_isDrawing;
     std::vector<Point> m_currentPoints;
     Point m_lastMousePos;
+    
+    // Polygon drawing state
+    std::vector<PolygonPoint> m_polygonPoints;
+    bool m_isDrawingPolygon;
 
     // Shape storage
     std::vector<Shape> m_shapes;
@@ -231,6 +244,7 @@ GraphicsWindow::GraphicsWindow()
         , m_backgroundBrush(nullptr)
         , m_hMenuBar(nullptr)
         , m_fillMode(false)
+        , m_isDrawingPolygon(false)
 {
 }
 
@@ -348,6 +362,11 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_LINES, "Circle Fill with Lines");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_QUARTER, "Circle Fill Quarter");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_CIRCLES, "Circle Fill Solid");
+    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_CONVEX, "Convex Polygon Fill");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_NONCONVEX, "Non-Convex Polygon Fill");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_RECURSIVE, "Flood Fill Recursive");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_NONRECURSIVE, "Flood Fill Non-Recursive");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFillMenu, "Fill");
 
     // Tools menu
@@ -445,9 +464,21 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             SetBkMode(hdc, TRANSPARENT);
             
             if (m_fillMode) {
-                TextOut(hdc, 10, 10, "FILL MODE: Click inside a circle to fill it | Right click to cancel", 65);
+                if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL || 
+                    m_currentFillMode == FillMode::POLYGON_NONCONVEX_FILL) {
+                    TextOut(hdc, 10, 10, "POLYGON FILL: Click near existing polygon to fill it", 50);
+                } else if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
+                           m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
+                    TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 42);
+                } else {
+                    TextOut(hdc, 10, 10, "FILL MODE: Click inside a circle to fill it | Right click to cancel", 65);
+                }
             } else {
-                TextOut(hdc, 10, 10, "Left click to draw shapes | Right click to finish/cancel", 55);
+                if (m_currentDrawingMode == DrawingMode::POLYGON) {
+                    TextOut(hdc, 10, 10, "POLYGON MODE: Left click to add points | Right click to finish", 61);
+                } else {
+                    TextOut(hdc, 10, 10, "Left click to draw shapes | Right click to finish/cancel", 55);
+                }
             }
 
             std::string modeText = "Current mode: ";
@@ -476,6 +507,10 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case FillMode::CIRCLE_FILL_LINES: fillText += "Circle Lines"; break;
                 case FillMode::CIRCLE_FILL_QUARTER: fillText += "Circle Quarter"; break;
                 case FillMode::CIRCLE_FILL_CIRCLES: fillText += "Circle Solid"; break;
+                case FillMode::POLYGON_CONVEX_FILL: fillText += "Convex Polygon"; break;
+                case FillMode::POLYGON_NONCONVEX_FILL: fillText += "Non-Convex Polygon"; break;
+                case FillMode::FLOOD_FILL_RECURSIVE_POLYGON: fillText += "Flood Fill Recursive"; break;
+                case FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON: fillText += "Flood Fill Non-Recursive"; break;
                 default: fillText += "None"; break;
             }
             TextOut(hdc, 10, 50, fillText.c_str(), fillText.length());
@@ -528,6 +563,9 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             shape.points = m_currentPoints;
             shape.thickness = m_lineThickness;
             m_shapes.push_back(shape);
+
+            // Draw directly to offscreen buffer for performance
+            DrawShapeToBuffer(shape);
         }
 
         // Reset drawing state
@@ -542,6 +580,46 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
     
     // If we're in fill mode, try to fill an existing circle
     if (m_fillMode) {
+        if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL || 
+            m_currentFillMode == FillMode::POLYGON_NONCONVEX_FILL) {
+            
+            // Fill existing polygons by clicking on them
+            for (auto& shape : m_shapes) {
+                if (shape.mode == DrawingMode::POLYGON && shape.points.size() >= 3) {
+                    // Simple point-in-polygon test - check if click is near any vertex
+                    bool inside = false;
+                    for (size_t i = 0; i < shape.points.size(); i++) {
+                        if (abs(shape.points[i].x - x) <= 50 && abs(shape.points[i].y - y) <= 50) {
+                            inside = true;
+                            break;
+                        }
+                    }
+                    
+                    if (inside) {
+                        shape.fillMode = m_currentFillMode;
+                        RebuildOffscreenBuffer();
+                        InvalidateRect(m_hwnd, NULL, TRUE);
+                        return;
+                    }
+                }
+            }
+            return;
+        }
+        
+        if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
+            m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
+            COLORREF originalColor = GetPixel(m_offscreenDC, x, y);
+            if (originalColor != m_currentColor) {
+                if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON) {
+                    FloodFillRecursive(m_offscreenDC, x, y, m_currentColor, originalColor);
+                } else {
+                    FloodFillNonRecursive(m_offscreenDC, x, y, m_currentColor, originalColor);
+                }
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+            return;
+        }
+        
         for (auto& shape : m_shapes) {
             // Check if it's a circle shape and if click is inside it
             if ((shape.mode == DrawingMode::CIRCLE_DIRECT ||
@@ -810,6 +888,22 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
         case MENU_FILL_CIRCLE_CIRCLES:
             SetFillMode(FillMode::CIRCLE_FILL_CIRCLES);
             break;
+
+        case MENU_FILL_POLYGON_CONVEX:
+            SetFillMode(FillMode::POLYGON_CONVEX_FILL);
+            break;
+
+        case MENU_FILL_POLYGON_NONCONVEX:
+            SetFillMode(FillMode::POLYGON_NONCONVEX_FILL);
+            break;
+
+        case MENU_FILL_FLOOD_RECURSIVE:
+            SetFillMode(FillMode::FLOOD_FILL_RECURSIVE_POLYGON);
+            break;
+
+        case MENU_FILL_FLOOD_NONRECURSIVE:
+            SetFillMode(FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON);
+            break;
     }
 }
 
@@ -952,6 +1046,39 @@ void GraphicsWindow::RedrawAll() {
                     int radiusX = abs(shape.points[1].x - shape.points[0].x);
                     int radiusY = abs(shape.points[1].y - shape.points[0].y);
                     DrawEllipseBresenham(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+                }
+                    break;
+                    
+                case DrawingMode::POLYGON:
+                {
+                    if (shape.points.size() >= 3) {
+                        // Draw polygon outline
+                        for (size_t i = 0; i < shape.points.size() - 1; i++) {
+                            DrawLineBresenham(hdc, shape.points[i].x, shape.points[i].y,
+                                             shape.points[i + 1].x, shape.points[i + 1].y, shape.color);
+                        }
+                        // Close the polygon
+                        DrawLineBresenham(hdc, shape.points.back().x, shape.points.back().y,
+                                         shape.points[0].x, shape.points[0].y, shape.color);
+                        
+                        // Apply polygon fill if set
+                        if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL || 
+                            shape.fillMode == FillMode::POLYGON_NONCONVEX_FILL) {
+                            
+                            PolygonPoint* pointsArray = new PolygonPoint[shape.points.size()];
+                            for (size_t i = 0; i < shape.points.size(); i++) {
+                                pointsArray[i] = PolygonPoint(shape.points[i].x, shape.points[i].y);
+                            }
+                            
+                            if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL) {
+                                ConvexFill(hdc, pointsArray, shape.points.size(), shape.color);
+                            } else {
+                                NonConvexFill(hdc, pointsArray, shape.points.size(), shape.color);
+                            }
+                            
+                            delete[] pointsArray;
+                        }
+                    }
                 }
                     break;
                     
@@ -1117,19 +1244,25 @@ void GraphicsWindow::SetTitle(const std::string& title) {
     }
 }
 
-// Set fill mode (placeholder)
+// Set fill mode
 void GraphicsWindow::SetFillMode(FillMode mode) {
     m_currentFillMode = mode;
     
-    // Enable fill mode for circle fill modes
+    // Enable fill mode for circle fill modes and polygon operations
     m_fillMode = (mode == FillMode::CIRCLE_FILL_LINES || 
                   mode == FillMode::CIRCLE_FILL_QUARTER || 
-                  mode == FillMode::CIRCLE_FILL_CIRCLES);
+                  mode == FillMode::CIRCLE_FILL_CIRCLES ||
+                  mode == FillMode::POLYGON_CONVEX_FILL ||
+                  mode == FillMode::POLYGON_NONCONVEX_FILL ||
+                  mode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON ||
+                  mode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON);
     
     // Reset drawing state when entering fill mode
     if (m_fillMode) {
         m_isDrawing = false;
         m_currentPoints.clear();
+        m_isDrawingPolygon = false;
+        m_polygonPoints.clear();
     }
     
     InvalidateRect(m_hwnd, NULL, TRUE);
@@ -1328,6 +1461,39 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             int radiusX = abs(shape.points[1].x - shape.points[0].x);
             int radiusY = abs(shape.points[1].y - shape.points[0].y);
             DrawEllipseBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+        }
+            break;
+            
+        case DrawingMode::POLYGON:
+        {
+            if (shape.points.size() >= 3) {
+                // Draw polygon outline
+                for (size_t i = 0; i < shape.points.size() - 1; i++) {
+                    DrawLineBresenham(m_offscreenDC, shape.points[i].x, shape.points[i].y,
+                                     shape.points[i + 1].x, shape.points[i + 1].y, shape.color);
+                }
+                // Close the polygon
+                DrawLineBresenham(m_offscreenDC, shape.points.back().x, shape.points.back().y,
+                                 shape.points[0].x, shape.points[0].y, shape.color);
+                
+                // Apply polygon fill if set
+                if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL || 
+                    shape.fillMode == FillMode::POLYGON_NONCONVEX_FILL) {
+                    
+                    PolygonPoint* pointsArray = new PolygonPoint[shape.points.size()];
+                    for (size_t i = 0; i < shape.points.size(); i++) {
+                        pointsArray[i] = PolygonPoint(shape.points[i].x, shape.points[i].y);
+                    }
+                    
+                    if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL) {
+                        ConvexFill(m_offscreenDC, pointsArray, shape.points.size(), shape.color);
+                    } else {
+                        NonConvexFill(m_offscreenDC, pointsArray, shape.points.size(), shape.color);
+                    }
+                    
+                    delete[] pointsArray;
+                }
+            }
         }
             break;
             
