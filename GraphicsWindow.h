@@ -9,6 +9,7 @@
 #include "LineAlgorithms.h"
 #include "CircleAlgorithms.h"
 #include "EllipseAlgorithms.h"
+#include "CircleFillAlgorithms.h"
 
 
 // ========================================
@@ -35,6 +36,10 @@
 #define MENU_SHAPES_CIRCLE_ITERATIVE 2023
 #define MENU_SHAPES_CIRCLE_MIDPOINT  2024
 #define MENU_SHAPES_CIRCLE_MODIFIED  2025
+#define MENU_SHAPES_CIRCLE_FILL      2005
+#define MENU_SHAPES_CIRCLE_FILL_LINES     2051
+#define MENU_SHAPES_CIRCLE_FILL_QUARTER   2052  
+#define MENU_SHAPES_CIRCLE_FILL_CIRCLES   2053
 #define MENU_SHAPES_ELLIPSE   2003
 #define MENU_SHAPES_ELLIPSE_DIRECT   2031
 #define MENU_SHAPES_ELLIPSE_POLAR    2032
@@ -51,6 +56,9 @@
 #define MENU_FILL_NONE        4001
 #define MENU_FILL_SOLID       4002
 #define MENU_FILL_PATTERN     4003
+#define MENU_FILL_CIRCLE_LINES     4051
+#define MENU_FILL_CIRCLE_QUARTER   4052  
+#define MENU_FILL_CIRCLE_CIRCLES   4053
 
 #define MENU_TOOLS_CLEAR      5001
 #define MENU_TOOLS_ZOOM_IN    5002
@@ -81,7 +89,10 @@ enum class FillMode {
     FLOOD_FILL_RECURSIVE,
     FLOOD_FILL_NON_RECURSIVE,
     SCANLINE_CONVEX,
-    SCANLINE_NON_CONVEX
+    SCANLINE_NON_CONVEX,
+    CIRCLE_FILL_LINES,
+    CIRCLE_FILL_QUARTER,
+    CIRCLE_FILL_CIRCLES
 };
 
 // Point structure for coordinates
@@ -111,12 +122,20 @@ private:
     HINSTANCE m_hInstance;
     HDC m_hdc;
 
+    // Offscreen drawing buffer for performance
+    HDC m_offscreenDC;
+    HBITMAP m_offscreenBitmap;
+    HBITMAP m_oldBitmap;
+    int m_canvasWidth;
+    int m_canvasHeight;
+
     // Drawing state
     DrawingMode m_currentDrawingMode;
     FillMode m_currentFillMode;
     COLORREF m_currentColor;
     COLORREF m_backgroundColor;
     int m_lineThickness;
+    bool m_fillMode; // New flag to indicate we're in fill mode
 
     // Mouse interaction state
     bool m_isDrawing;
@@ -147,6 +166,11 @@ private:
     void InitializeMenus();
     void InitializeDrawingTools();
     void CleanupDrawingTools();
+    void CreateOffscreenBuffer(int width, int height);
+    void CleanupOffscreenBuffer();
+    void ClearOffscreenBuffer();
+    void DrawShapeToBuffer(const Shape& shape);
+    void RebuildOffscreenBuffer();
     void UpdateCurrentPen();
     void HandleMouseClick(int x, int y, bool isLeftButton);
     void HandleMouseMove(int x, int y);
@@ -191,6 +215,11 @@ GraphicsWindow::GraphicsWindow()
         : m_hwnd(nullptr)
         , m_hInstance(nullptr)
         , m_hdc(nullptr)
+        , m_offscreenDC(nullptr)
+        , m_offscreenBitmap(nullptr)
+        , m_oldBitmap(nullptr)
+        , m_canvasWidth(0)
+        , m_canvasHeight(0)
         , m_currentDrawingMode(DrawingMode::LINE_DDA)
         , m_currentFillMode(FillMode::NONE)
         , m_currentColor(RGB(0, 0, 0))  // Black
@@ -201,11 +230,13 @@ GraphicsWindow::GraphicsWindow()
         , m_currentBrush(nullptr)
         , m_backgroundBrush(nullptr)
         , m_hMenuBar(nullptr)
+        , m_fillMode(false)
 {
 }
 
 // Destructor
 GraphicsWindow::~GraphicsWindow() {
+    CleanupOffscreenBuffer();
     CleanupDrawingTools();
     if (m_hwnd) {
         DestroyWindow(m_hwnd);
@@ -246,6 +277,9 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // Initialize menus and drawing tools
     InitializeMenus();
     InitializeDrawingTools();
+
+    // Create offscreen buffer for double buffering
+    CreateOffscreenBuffer(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
 
     ShowWindow(m_hwnd, nCmdShow);
     UpdateWindow(m_hwnd);
@@ -306,9 +340,21 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hColorsMenu, MF_STRING, MENU_COLORS_CUSTOM, "Custom Color...");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hColorsMenu, "Colors");
 
+    // Fill menu
+    HMENU hFillMenu = CreatePopupMenu();
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_NONE, "None");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_SOLID, "Solid");
+    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_LINES, "Circle Fill with Lines");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_QUARTER, "Circle Fill Quarter");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_CIRCLES, "Circle Fill Solid");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFillMenu, "Fill");
+
     // Tools menu
     HMENU hToolsMenu = CreatePopupMenu();
     AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_CLEAR, "Clear Canvas\tCtrl+L");
+    AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_IN, "Zoom In\tCtrl+I");
+    AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_OUT, "Zoom Out\tCtrl+O");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, "Tools");
 
     SetMenu(m_hwnd, m_hMenuBar);
@@ -389,13 +435,20 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
 
-            // Draw all saved shapes
-            RedrawAll();
+            // Copy from offscreen buffer for much better performance
+            if (m_offscreenDC) {
+                BitBlt(hdc, 0, 0, m_canvasWidth, m_canvasHeight, m_offscreenDC, 0, 0, SRCCOPY);
+            }
 
-            // Draw instructions
+            // Draw instructions on top
             SetTextColor(hdc, RGB(100, 100, 100));
             SetBkMode(hdc, TRANSPARENT);
-            TextOut(hdc, 10, 10, "Left click to draw shapes | Right click to finish/cancel", 55);
+            
+            if (m_fillMode) {
+                TextOut(hdc, 10, 10, "FILL MODE: Click inside a circle to fill it | Right click to cancel", 65);
+            } else {
+                TextOut(hdc, 10, 10, "Left click to draw shapes | Right click to finish/cancel", 55);
+            }
 
             std::string modeText = "Current mode: ";
             switch (m_currentDrawingMode) {
@@ -415,13 +468,37 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             }
             TextOut(hdc, 10, 30, modeText.c_str(), modeText.length());
 
+            // Display current fill mode
+            std::string fillText = "Current fill: ";
+            switch (m_currentFillMode) {
+                case FillMode::NONE: fillText += "None"; break;
+                case FillMode::SOLID: fillText += "Solid"; break;
+                case FillMode::CIRCLE_FILL_LINES: fillText += "Circle Lines"; break;
+                case FillMode::CIRCLE_FILL_QUARTER: fillText += "Circle Quarter"; break;
+                case FillMode::CIRCLE_FILL_CIRCLES: fillText += "Circle Solid"; break;
+                default: fillText += "None"; break;
+            }
+            TextOut(hdc, 10, 50, fillText.c_str(), fillText.length());
+
             EndPaint(hwnd, &ps);
         }
             break;
 
         case WM_SIZE:
-            // Handle window resize if needed
+        {
+            // Handle window resize - recreate offscreen buffer
+            RECT clientRect;
+            GetClientRect(hwnd, &clientRect);
+            int newWidth = clientRect.right - clientRect.left;
+            int newHeight = clientRect.bottom - clientRect.top;
+            
+            if (newWidth > 0 && newHeight > 0) {
+                CreateOffscreenBuffer(newWidth, newHeight);
+                RebuildOffscreenBuffer();
+            }
+            
             InvalidateRect(hwnd, NULL, TRUE);
+        }
             break;
 
         case WM_CLOSE:
@@ -460,9 +537,43 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
         return;
     }
 
-    // Left click - add point or complete shape
+    // Left click - check if we're in fill mode first
     Point newPoint(x, y);
+    
+    // If we're in fill mode, try to fill an existing circle
+    if (m_fillMode) {
+        for (auto& shape : m_shapes) {
+            // Check if it's a circle shape and if click is inside it
+            if ((shape.mode == DrawingMode::CIRCLE_DIRECT ||
+                 shape.mode == DrawingMode::CIRCLE_POLAR ||
+                 shape.mode == DrawingMode::CIRCLE_ITERATIVE_POLAR ||
+                 shape.mode == DrawingMode::CIRCLE_MIDPOINT ||
+                 shape.mode == DrawingMode::CIRCLE_MODIFIED_MIDPOINT) &&
+                shape.points.size() >= 2) {
+                
+                // Calculate circle radius
+                int radius = (int)sqrt(
+                    pow(shape.points[1].x - shape.points[0].x, 2) +
+                    pow(shape.points[1].y - shape.points[0].y, 2)
+                );
+                
+                // Check if click point is inside this circle
+                if (IsPointInCircle(x, y, shape.points[0].x, shape.points[0].y, radius)) {
+                    // Update the shape's fill mode
+                    shape.fillMode = m_currentFillMode;
+                    
+                    // Rebuild buffer to ensure proper rendering with fills
+                    RebuildOffscreenBuffer();
+                    
+                    InvalidateRect(m_hwnd, NULL, TRUE);
+                    return; // Fill the first circle found and exit
+                }
+            }
+        }
+        return; // In fill mode but didn't click inside any circle
+    }
 
+    // Normal drawing mode - add point or complete shape
     switch (m_currentDrawingMode) {
         case DrawingMode::LINE_DDA:
         case DrawingMode::LINE_BRESENHAM:
@@ -484,6 +595,9 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 shape.points = m_currentPoints;
                 shape.thickness = m_lineThickness;
                 m_shapes.push_back(shape);
+
+                // Draw directly to offscreen buffer for performance
+                DrawShapeToBuffer(shape);
 
                 m_isDrawing = false;
                 m_currentPoints.clear();
@@ -515,6 +629,9 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 shape.thickness = m_lineThickness;
                 m_shapes.push_back(shape);
 
+                // Draw directly to offscreen buffer for performance
+                DrawShapeToBuffer(shape);
+
                 m_isDrawing = false;
                 m_currentPoints.clear();
                 InvalidateRect(m_hwnd, NULL, TRUE);
@@ -542,6 +659,9 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 shape.points = m_currentPoints;
                 shape.thickness = m_lineThickness;
                 m_shapes.push_back(shape);
+
+                // Draw directly to offscreen buffer for performance
+                DrawShapeToBuffer(shape);
 
                 m_isDrawing = false;
                 m_currentPoints.clear();
@@ -670,6 +790,26 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
         case MENU_TOOLS_CLEAR:
             ClearCanvas();
             break;
+
+        case MENU_FILL_NONE:
+            SetFillMode(FillMode::NONE);
+            break;
+
+        case MENU_FILL_SOLID:
+            SetFillMode(FillMode::SOLID);
+            break;
+
+        case MENU_FILL_CIRCLE_LINES:
+            SetFillMode(FillMode::CIRCLE_FILL_LINES);
+            break;
+
+        case MENU_FILL_CIRCLE_QUARTER:
+            SetFillMode(FillMode::CIRCLE_FILL_QUARTER);
+            break;
+
+        case MENU_FILL_CIRCLE_CIRCLES:
+            SetFillMode(FillMode::CIRCLE_FILL_CIRCLES);
+            break;
     }
 }
 
@@ -703,6 +843,15 @@ void GraphicsWindow::RedrawAll() {
                         pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircle1(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    
+                    // Apply fill mode if set
+                    if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                        FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                        FillQuarterCircle(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                        FillCircleWithCircles(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    }
                 }
                     break;
                     
@@ -713,6 +862,15 @@ void GraphicsWindow::RedrawAll() {
                         pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircle2(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    
+                    // Apply fill mode if set
+                    if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                        FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                        FillQuarterCircle(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                        FillCircleWithCircles(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    }
                 }
                     break;
                     
@@ -723,6 +881,15 @@ void GraphicsWindow::RedrawAll() {
                         pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircle3(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    
+                    // Apply fill mode if set
+                    if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                        FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                        FillQuarterCircle(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                        FillCircleWithCircles(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    }
                 }
                     break;
                     
@@ -733,6 +900,15 @@ void GraphicsWindow::RedrawAll() {
                         pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircleBresenham(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    
+                    // Apply fill mode if set
+                    if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                        FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                        FillQuarterCircle(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                        FillCircleWithCircles(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    }
                 }
                     break;
                     
@@ -743,6 +919,15 @@ void GraphicsWindow::RedrawAll() {
                         pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircleDDA1(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    
+                    // Apply fill mode if set
+                    if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                        FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                        FillQuarterCircle(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                        FillCircleWithCircles(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
+                    }
                 }
                     break;
                     
@@ -882,6 +1067,10 @@ void GraphicsWindow::ClearCanvas() {
     m_shapes.clear();
     m_isDrawing = false;
     m_currentPoints.clear();
+    
+    // Clear offscreen buffer
+    ClearOffscreenBuffer();
+    
     InvalidateRect(m_hwnd, NULL, TRUE);
 }
 
@@ -899,6 +1088,10 @@ void GraphicsWindow::SetDrawingMode(DrawingMode mode) {
     m_currentDrawingMode = mode;
     m_isDrawing = false;
     m_currentPoints.clear();
+    
+    // Reset fill mode when switching to drawing mode
+    m_fillMode = false;
+    
     InvalidateRect(m_hwnd, NULL, TRUE);
 }
 
@@ -927,6 +1120,19 @@ void GraphicsWindow::SetTitle(const std::string& title) {
 // Set fill mode (placeholder)
 void GraphicsWindow::SetFillMode(FillMode mode) {
     m_currentFillMode = mode;
+    
+    // Enable fill mode for circle fill modes
+    m_fillMode = (mode == FillMode::CIRCLE_FILL_LINES || 
+                  mode == FillMode::CIRCLE_FILL_QUARTER || 
+                  mode == FillMode::CIRCLE_FILL_CIRCLES);
+    
+    // Reset drawing state when entering fill mode
+    if (m_fillMode) {
+        m_isDrawing = false;
+        m_currentPoints.clear();
+    }
+    
+    InvalidateRect(m_hwnd, NULL, TRUE);
 }
 
 // Set line thickness (placeholder)
@@ -943,6 +1149,205 @@ void GraphicsWindow::SaveToFile(const std::string& filename) {
 // Load from file (placeholder)
 void GraphicsWindow::LoadFromFile(const std::string& filename) {
     // TODO: Implement file loading
+}
+
+// Create offscreen buffer for double buffering
+void GraphicsWindow::CreateOffscreenBuffer(int width, int height) {
+    CleanupOffscreenBuffer();
+    
+    m_canvasWidth = width;
+    m_canvasHeight = height;
+    
+    HDC hdc = GetDC(m_hwnd);
+    m_offscreenDC = CreateCompatibleDC(hdc);
+    m_offscreenBitmap = CreateCompatibleBitmap(hdc, width, height);
+    m_oldBitmap = (HBITMAP)SelectObject(m_offscreenDC, m_offscreenBitmap);
+    ReleaseDC(m_hwnd, hdc);
+    
+    ClearOffscreenBuffer();
+}
+
+// Cleanup offscreen buffer
+void GraphicsWindow::CleanupOffscreenBuffer() {
+    if (m_offscreenDC) {
+        if (m_oldBitmap) {
+            SelectObject(m_offscreenDC, m_oldBitmap);
+            m_oldBitmap = nullptr;
+        }
+        DeleteDC(m_offscreenDC);
+        m_offscreenDC = nullptr;
+    }
+    if (m_offscreenBitmap) {
+        DeleteObject(m_offscreenBitmap);
+        m_offscreenBitmap = nullptr;
+    }
+}
+
+// Clear offscreen buffer with background color
+void GraphicsWindow::ClearOffscreenBuffer() {
+    if (m_offscreenDC) {
+        RECT rect = {0, 0, m_canvasWidth, m_canvasHeight};
+        FillRect(m_offscreenDC, &rect, m_backgroundBrush);
+    }
+}
+
+// Draw shape to buffer
+void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
+    if (!m_offscreenDC || shape.points.size() < 2) return;
+
+    // Draw shape using its respective algorithm to offscreen buffer
+    switch (shape.mode) {
+        case DrawingMode::LINE_DDA:
+            DrawLineDDA(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                       shape.points[1].x, shape.points[1].y, shape.color);
+            break;
+            
+        case DrawingMode::LINE_BRESENHAM:
+            DrawLineBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                             shape.points[1].x, shape.points[1].y, shape.color);
+            break;
+            
+        case DrawingMode::LINE_PARAMETRIC:
+            DrawLineParametric(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                              shape.points[1].x, shape.points[1].y, shape.color);
+            break;
+            
+        case DrawingMode::CIRCLE_DIRECT:
+        {
+            int radius = (int)sqrt(
+                pow(shape.points[1].x - shape.points[0].x, 2) +
+                pow(shape.points[1].y - shape.points[0].y, 2)
+            );
+            DrawCircle1(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            
+            // Apply fill mode if set
+            if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                FillQuarterCircle(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                FillCircleWithCircles(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            }
+        }
+            break;
+            
+        case DrawingMode::CIRCLE_POLAR:
+        {
+            int radius = (int)sqrt(
+                pow(shape.points[1].x - shape.points[0].x, 2) +
+                pow(shape.points[1].y - shape.points[0].y, 2)
+            );
+            DrawCircle2(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            
+            // Apply fill mode if set
+            if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                FillQuarterCircle(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                FillCircleWithCircles(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            }
+        }
+            break;
+            
+        case DrawingMode::CIRCLE_ITERATIVE_POLAR:
+        {
+            int radius = (int)sqrt(
+                pow(shape.points[1].x - shape.points[0].x, 2) +
+                pow(shape.points[1].y - shape.points[0].y, 2)
+            );
+            DrawCircle3(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            
+            // Apply fill mode if set
+            if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                FillQuarterCircle(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                FillCircleWithCircles(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            }
+        }
+            break;
+            
+        case DrawingMode::CIRCLE_MIDPOINT:
+        {
+            int radius = (int)sqrt(
+                pow(shape.points[1].x - shape.points[0].x, 2) +
+                pow(shape.points[1].y - shape.points[0].y, 2)
+            );
+            DrawCircleBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            
+            // Apply fill mode if set
+            if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                FillQuarterCircle(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                FillCircleWithCircles(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            }
+        }
+            break;
+            
+        case DrawingMode::CIRCLE_MODIFIED_MIDPOINT:
+        {
+            int radius = (int)sqrt(
+                pow(shape.points[1].x - shape.points[0].x, 2) +
+                pow(shape.points[1].y - shape.points[0].y, 2)
+            );
+            DrawCircleDDA1(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            
+            // Apply fill mode if set
+            if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
+                FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_QUARTER) {
+                FillQuarterCircle(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            } else if (shape.fillMode == FillMode::CIRCLE_FILL_CIRCLES) {
+                FillCircleWithCircles(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
+            }
+        }
+            break;
+            
+        case DrawingMode::ELLIPSE_DIRECT:
+        {
+            int radiusX = abs(shape.points[1].x - shape.points[0].x);
+            int radiusY = abs(shape.points[1].y - shape.points[0].y);
+            DrawEllipse1(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+        }
+            break;
+            
+        case DrawingMode::ELLIPSE_POLAR:
+        {
+            int radiusX = abs(shape.points[1].x - shape.points[0].x);
+            int radiusY = abs(shape.points[1].y - shape.points[0].y);
+            DrawEllipse2(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+        }
+            break;
+            
+        case DrawingMode::ELLIPSE_MIDPOINT:
+        {
+            int radiusX = abs(shape.points[1].x - shape.points[0].x);
+            int radiusY = abs(shape.points[1].y - shape.points[0].y);
+            DrawEllipseBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
+        }
+            break;
+            
+        default:
+            // TODO: Implement other shape algorithms
+            break;
+    }
+}
+
+// Rebuild offscreen buffer
+void GraphicsWindow::RebuildOffscreenBuffer() {
+    if (!m_offscreenDC) return;
+    
+    // Clear buffer
+    ClearOffscreenBuffer();
+    
+    // Redraw all shapes
+    for (const auto& shape : m_shapes) {
+        DrawShapeToBuffer(shape);
+    }
 }
 
 // ========================================
