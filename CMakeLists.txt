@@ -15,4 +15,5 @@ add_executable(2D-Graphics-Project
         PolarCircle.cpp
         Square.cpp
         Rectangle.cpp
+        HermiteAlgorithms.cpp
 )

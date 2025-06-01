@@ -115,6 +115,12 @@ build CMakeFiles/2D-Graphics-Project.dir/Rectangle.cpp.obj: CXX_COMPILER__2D-Gra
   OBJECT_DIR = CMakeFiles\2D-Graphics-Project.dir
   OBJECT_FILE_DIR = CMakeFiles\2D-Graphics-Project.dir
 
+build CMakeFiles/2D-Graphics-Project.dir/HermiteAlgorithms.cpp.obj: CXX_COMPILER__2D-Graphics-Project_unscanned_Debug D$:/Github/2D-Graphics-Project/HermiteAlgorithms.cpp || cmake_object_order_depends_target_2D-Graphics-Project
+  DEP_FILE = CMakeFiles\2D-Graphics-Project.dir\HermiteAlgorithms.cpp.obj.d
+  FLAGS = -g -std=gnu++17 -fdiagnostics-color=always
+  OBJECT_DIR = CMakeFiles\2D-Graphics-Project.dir
+  OBJECT_FILE_DIR = CMakeFiles\2D-Graphics-Project.dir
+
 
 # =============================================================================
 # Link build statements for EXECUTABLE target 2D-Graphics-Project
@@ -123,7 +129,7 @@ build CMakeFiles/2D-Graphics-Project.dir/Rectangle.cpp.obj: CXX_COMPILER__2D-Gra
 #############################################
 # Link the executable 2D-Graphics-Project.exe
 
-build 2D-Graphics-Project.exe: CXX_EXECUTABLE_LINKER__2D-Graphics-Project_Debug CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj CMakeFiles/2D-Graphics-Project.dir/BresenhamLine.cpp.obj CMakeFiles/2D-Graphics-Project.dir/DDALine.cpp.obj CMakeFiles/2D-Graphics-Project.dir/DirectCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/IterativePolarCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/MidpointCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/ModifiedMidpointCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/ParametricLine.cpp.obj CMakeFiles/2D-Graphics-Project.dir/PolarCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/Square.cpp.obj CMakeFiles/2D-Graphics-Project.dir/Rectangle.cpp.obj
+build 2D-Graphics-Project.exe: CXX_EXECUTABLE_LINKER__2D-Graphics-Project_Debug CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj CMakeFiles/2D-Graphics-Project.dir/BresenhamLine.cpp.obj CMakeFiles/2D-Graphics-Project.dir/DDALine.cpp.obj CMakeFiles/2D-Graphics-Project.dir/DirectCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/IterativePolarCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/MidpointCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/ModifiedMidpointCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/ParametricLine.cpp.obj CMakeFiles/2D-Graphics-Project.dir/PolarCircle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/Square.cpp.obj CMakeFiles/2D-Graphics-Project.dir/Rectangle.cpp.obj CMakeFiles/2D-Graphics-Project.dir/HermiteAlgorithms.cpp.obj
   FLAGS = -g
   LINK_LIBRARIES = -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
   OBJECT_DIR = CMakeFiles\2D-Graphics-Project.dir
