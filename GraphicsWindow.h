@@ -78,6 +78,10 @@
 #define MENU_TOOLS_ZOOM_IN    5002
 #define MENU_TOOLS_ZOOM_OUT   5003
 
+#define MENU_CURSOR_ARROW     6001
+#define MENU_CURSOR_HAND      6002
+#define MENU_CURSOR_CROSSHAIR 6003
+
 
 using namespace std;
 
@@ -177,10 +181,11 @@ private:
     // Pens and brushes
     HPEN m_currentPen;
     HBRUSH m_currentBrush;
-    HBRUSH m_backgroundBrush;
-
-    // Menu handle
+    HBRUSH m_backgroundBrush;    // Menu handle
     HMENU m_hMenuBar;
+
+    // Cursor handle
+    HCURSOR m_currentCursor;
 
     // Window class name
     static const char* s_className;
@@ -218,13 +223,12 @@ public:
     bool Initialize(HINSTANCE hInstance, int nCmdShow);
     void Run();
     void SetTitle(const std::string& title);
-    void SetBackgroundColor(COLORREF color);
-
-    // Drawing mode setters
+    void SetBackgroundColor(COLORREF color);    // Drawing mode setters
     void SetDrawingMode(DrawingMode mode);
     void SetFillMode(FillMode mode);
     void SetDrawingColor(COLORREF color);
     void SetLineThickness(int thickness);
+    void SetMouseCursor(HCURSOR cursor);
 
     // Utility methods
     HWND GetHandle() const { return m_hwnd; }
@@ -256,9 +260,9 @@ GraphicsWindow::GraphicsWindow()
         , m_lineThickness(1)
         , m_isDrawing(false)
         , m_currentPen(nullptr)
-        , m_currentBrush(nullptr)
-        , m_backgroundBrush(nullptr)
+        , m_currentBrush(nullptr)        , m_backgroundBrush(nullptr)
         , m_hMenuBar(nullptr)
+        , m_currentCursor(LoadCursor(NULL, IDC_CROSS))
         , m_fillMode(false)
         , m_isDrawingPolygon(false)
 {
@@ -280,17 +284,14 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // Register window class
     WNDCLASS wc = {0};
     wc.lpfnWndProc = StaticWndProc;
-    wc.hInstance = hInstance;
-    wc.hbrBackground = CreateSolidBrush(m_backgroundColor);
+    wc.hInstance = hInstance;    wc.hbrBackground = CreateSolidBrush(m_backgroundColor);
     wc.lpszClassName = s_className;
-    wc.hCursor = LoadCursor(NULL, IDC_CROSS);  // Custom cursor for drawing
+    wc.hCursor = m_currentCursor;  // Use current cursor
     wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;  // Add CS_OWNDC for better performance
 
     if (!RegisterClass(&wc)) {
         return false;
-    }
-
-    // Create window
+    }    // Create window
     m_hwnd = CreateWindow(
             s_className,
             "2D Graphics Drawing Program",
@@ -302,17 +303,23 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     if (!m_hwnd) {
         return false;
-    }
-
-    // Initialize menus and drawing tools
+    }    // Initialize menus and drawing tools
     InitializeMenus();
     InitializeDrawingTools();
 
     // Create offscreen buffer for double buffering
     CreateOffscreenBuffer(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
 
+    // Show window with proper visibility and focus
     ShowWindow(m_hwnd, nCmdShow);
     UpdateWindow(m_hwnd);
+    
+    // Ensure window stays visible and gets focus
+    SetWindowPos(m_hwnd, HWND_TOP, 0, 0, 0, 0, 
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetForegroundWindow(m_hwnd);
+    SetActiveWindow(m_hwnd);
+    SetFocus(m_hwnd);
 
     return true;
 }
@@ -391,14 +398,19 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_NONCONVEX, "Non-Convex Polygon Fill");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_RECURSIVE, "Flood Fill Recursive");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_NONRECURSIVE, "Flood Fill Non-Recursive");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFillMenu, "Fill");
-
-    // Tools menu
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFillMenu, "Fill");    // Tools menu
     HMENU hToolsMenu = CreatePopupMenu();
     AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_CLEAR, "Clear Canvas\tCtrl+L");
     AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_IN, "Zoom In\tCtrl+I");
     AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_OUT, "Zoom Out\tCtrl+O");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, "Tools");
+
+    // Cursor menu
+    HMENU hCursorMenu = CreatePopupMenu();
+    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_ARROW, "Arrow");
+    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_HAND, "Hand");
+    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_CROSSHAIR, "Crosshair");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hCursorMenu, "Cursor");
 
     SetMenu(m_hwnd, m_hMenuBar);
 }
@@ -463,15 +475,20 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             int y = HIWORD(lParam);
             HandleMouseClick(x, y, false);
         }
-            break;
-
-        case WM_MOUSEMOVE:
+            break;        case WM_MOUSEMOVE:
         {
             int x = LOWORD(lParam);
             int y = HIWORD(lParam);
             HandleMouseMove(x, y);
         }
             break;
+
+        case WM_SETCURSOR:
+            if (LOWORD(lParam) == HTCLIENT) {
+                ::SetCursor(m_currentCursor);
+                return TRUE;
+            }
+            return DefWindowProc(hwnd, message, wParam, lParam);
 
         case WM_PAINT:
         {
@@ -1028,10 +1045,20 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
 
         case MENU_COLORS_WHITE:
             SetDrawingColor(RGB(255, 255, 255));
+            break;        case MENU_TOOLS_CLEAR:
+            ClearCanvas();
             break;
 
-        case MENU_TOOLS_CLEAR:
-            ClearCanvas();
+        case MENU_CURSOR_ARROW:
+            SetMouseCursor(LoadCursor(NULL, IDC_ARROW));
+            break;
+
+        case MENU_CURSOR_HAND:
+            SetMouseCursor(LoadCursor(NULL, IDC_HAND));
+            break;
+
+        case MENU_CURSOR_CROSSHAIR:
+            SetMouseCursor(LoadCursor(NULL, IDC_CROSS));
             break;
 
         case MENU_FILL_NONE:
@@ -1535,6 +1562,15 @@ void GraphicsWindow::SetBackgroundColor(COLORREF color) {
 void GraphicsWindow::SetTitle(const std::string& title) {
     if (m_hwnd) {
         SetWindowText(m_hwnd, title.c_str());
+    }
+}
+
+// Set mouse cursor
+void GraphicsWindow::SetMouseCursor(HCURSOR cursor) {
+    m_currentCursor = cursor;
+    if (m_hwnd) {
+        SetClassLongPtr(m_hwnd, GCLP_HCURSOR, (LONG_PTR)cursor);
+        ::SetCursor(cursor);
     }
 }
 

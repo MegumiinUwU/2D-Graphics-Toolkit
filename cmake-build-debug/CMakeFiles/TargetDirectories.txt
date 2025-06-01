@@ -1,3 +1,0 @@
-D:/Github/2D-Graphics-Project/cmake-build-debug/CMakeFiles/2D-Graphics-Project.dir
-D:/Github/2D-Graphics-Project/cmake-build-debug/CMakeFiles/edit_cache.dir
-D:/Github/2D-Graphics-Project/cmake-build-debug/CMakeFiles/rebuild_cache.dir
