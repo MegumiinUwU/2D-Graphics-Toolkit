@@ -11,6 +11,8 @@
 #include "EllipseAlgorithms.h"
 #include "CircleFillAlgorithms.h"
 #include "PolygonFillAlgorithms.h"
+#include "SquareAlgorithms.h"
+#include "RectangleAlgorithms.h"
 
 
 // ========================================
@@ -46,6 +48,8 @@
 #define MENU_SHAPES_ELLIPSE_POLAR    2032
 #define MENU_SHAPES_ELLIPSE_MIDPOINT 2033
 #define MENU_SHAPES_POLYGON   2004
+#define MENU_SHAPES_SQUARE    2005
+#define MENU_SHAPES_RECTANGLE 2006
 
 #define MENU_COLORS_RED       3001
 #define MENU_COLORS_GREEN     3002
@@ -79,10 +83,10 @@ enum class DrawingMode {
     CIRCLE_ITERATIVE_POLAR,
     CIRCLE_MIDPOINT,
     CIRCLE_MODIFIED_MIDPOINT,
-    ELLIPSE_DIRECT,
-    ELLIPSE_POLAR,
-    ELLIPSE_MIDPOINT,
+    ELLIPSE_DIRECT,    ELLIPSE_POLAR,    ELLIPSE_MIDPOINT,
     POLYGON,
+    SQUARE,
+    RECTANGLE,
     CURVE_CARDINAL,
     NONE
 };
@@ -150,6 +154,9 @@ private:
     bool m_isDrawing;
     std::vector<Point> m_currentPoints;
     Point m_lastMousePos;
+    
+    // Rectangle dragging state
+    bool m_isDraggingRectangle;
     
     // Polygon drawing state
     std::vector<PolygonPoint> m_polygonPoints;
@@ -336,11 +343,13 @@ void GraphicsWindow::InitializeMenus() {
     // Ellipse submenu
     HMENU hEllipseMenu = CreatePopupMenu();
     AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_DIRECT, "Direct Algorithm");
-    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");
-    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");
-    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");
-    
-    AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
+    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");
+      // Polygon submenu
+    HMENU hPolygonMenu = CreatePopupMenu();
+    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
+    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_SQUARE, "Square");
+    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_RECTANGLE, "Rectangle");
+    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hPolygonMenu, "Polygon");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapesMenu, "Shapes");
 
     // Colors menu
@@ -492,9 +501,10 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case DrawingMode::CIRCLE_MIDPOINT: modeText += "Circle (Midpoint)"; break;
                 case DrawingMode::CIRCLE_MODIFIED_MIDPOINT: modeText += "Circle (Modified Midpoint)"; break;
                 case DrawingMode::ELLIPSE_DIRECT: modeText += "Ellipse (Direct)"; break;
-                case DrawingMode::ELLIPSE_POLAR: modeText += "Ellipse (Polar)"; break;
-                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse (Midpoint)"; break;
+                case DrawingMode::ELLIPSE_POLAR: modeText += "Ellipse (Polar)"; break;                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse (Midpoint)"; break;
                 case DrawingMode::POLYGON: modeText += "Polygon"; break;
+                case DrawingMode::SQUARE: modeText += "Square"; break;
+                case DrawingMode::RECTANGLE: modeText += "Rectangle"; break;
                 default: modeText += "None"; break;
             }
             TextOut(hdc, 10, 30, modeText.c_str(), modeText.length());
@@ -746,6 +756,62 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 InvalidateRect(m_hwnd, NULL, TRUE);
             }
         }
+            break;        case DrawingMode::SQUARE:
+        {
+            if (!m_isDrawing) {
+                // Start square (center point)
+                m_currentPoints.clear();
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;
+            } else {
+                // Finish square (edge point to define half-size)
+                m_currentPoints.push_back(newPoint);
+
+                Shape shape;
+                shape.mode = m_currentDrawingMode;
+                shape.color = m_currentColor;
+                shape.fillMode = m_currentFillMode;
+                shape.points = m_currentPoints;
+                shape.thickness = m_lineThickness;
+                m_shapes.push_back(shape);
+
+                // Draw directly to offscreen buffer for performance
+                DrawShapeToBuffer(shape);
+
+                m_isDrawing = false;
+                m_currentPoints.clear();
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+        }
+            break;
+
+        case DrawingMode::RECTANGLE:
+        {
+            if (!m_isDrawing) {
+                // Start rectangle (center point)
+                m_currentPoints.clear();
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;
+            } else {
+                // Finish rectangle (corner point to define dimensions)
+                m_currentPoints.push_back(newPoint);
+
+                Shape shape;
+                shape.mode = m_currentDrawingMode;
+                shape.color = m_currentColor;
+                shape.fillMode = m_currentFillMode;
+                shape.points = m_currentPoints;
+                shape.thickness = m_lineThickness;
+                m_shapes.push_back(shape);
+
+                // Draw directly to offscreen buffer for performance
+                DrawShapeToBuffer(shape);
+
+                m_isDrawing = false;
+                m_currentPoints.clear();
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+        }
             break;
 
         case DrawingMode::POLYGON:
@@ -839,10 +905,14 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
 
         case MENU_SHAPES_ELLIPSE_MIDPOINT:
             SetDrawingMode(DrawingMode::ELLIPSE_MIDPOINT);
+            break;        case MENU_SHAPES_POLYGON:
+            SetDrawingMode(DrawingMode::POLYGON);
+            break;        case MENU_SHAPES_SQUARE:
+            SetDrawingMode(DrawingMode::SQUARE);
             break;
 
-        case MENU_SHAPES_POLYGON:
-            SetDrawingMode(DrawingMode::POLYGON);
+        case MENU_SHAPES_RECTANGLE:
+            SetDrawingMode(DrawingMode::RECTANGLE);
             break;
 
         case MENU_COLORS_BLACK:
@@ -1047,8 +1117,33 @@ void GraphicsWindow::RedrawAll() {
                     int radiusY = abs(shape.points[1].y - shape.points[0].y);
                     DrawEllipseBresenham(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
                 }
+                    break;                case DrawingMode::SQUARE:
+                {
+                    if (shape.points.size() >= 2) {
+                        // Calculate half-size (distance from center to edge)
+                        int centerX = shape.points[0].x;
+                        int centerY = shape.points[0].y;
+                        int halfSize = (int)sqrt(
+                            pow(shape.points[1].x - centerX, 2) +
+                            pow(shape.points[1].y - centerY, 2)
+                        );
+                        
+                        // Draw square using our DrawSquare function
+                        DrawSquare(hdc, centerX, centerY, halfSize, shape.color);
+                    }
+                }
                     break;
-                    
+                
+                case DrawingMode::RECTANGLE:
+                {
+                    if (shape.points.size() >= 2) {
+                        // Draw rectangle using our DrawRectangle function
+                        DrawRectangle(hdc, shape.points[0].x, shape.points[0].y,
+                                    shape.points[1].x, shape.points[1].y, shape.color);
+                    }
+                }
+                    break;
+                
                 case DrawingMode::POLYGON:
                 {
                     if (shape.points.size() >= 3) {
@@ -1081,7 +1176,7 @@ void GraphicsWindow::RedrawAll() {
                     }
                 }
                     break;
-                    
+                
                 default:
                     // TODO: Implement other shape algorithms
                     break;
@@ -1149,6 +1244,59 @@ void GraphicsWindow::RedrawAll() {
                     Ellipse(hdc,
                             m_currentPoints[0].x - radiusX, m_currentPoints[0].y - radiusY,
                             m_currentPoints[0].x + radiusX, m_currentPoints[0].y + radiusY);
+
+                    SelectObject(hdc, oldPen);
+                    SelectObject(hdc, oldBrush);
+                    DeleteObject(tempPen);
+                }
+                break;            case DrawingMode::SQUARE:
+                // Draw current square preview
+                if (m_currentPoints.size() == 1) {
+                    // Calculate half-size (distance from center to mouse position)
+                    int centerX = m_currentPoints[0].x;
+                    int centerY = m_currentPoints[0].y;
+                    int halfSize = (int)sqrt(
+                        pow(m_lastMousePos.x - centerX, 2) +
+                        pow(m_lastMousePos.y - centerY, 2)
+                    );
+                    
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    // Draw square preview using lines
+                    MoveToEx(hdc, centerX - halfSize, centerY - halfSize, NULL);
+                    LineTo(hdc, centerX + halfSize, centerY - halfSize);
+                    MoveToEx(hdc, centerX + halfSize, centerY - halfSize, NULL);
+                    LineTo(hdc, centerX + halfSize, centerY + halfSize);
+                    MoveToEx(hdc, centerX + halfSize, centerY + halfSize, NULL);
+                    LineTo(hdc, centerX - halfSize, centerY + halfSize);
+                    MoveToEx(hdc, centerX - halfSize, centerY + halfSize, NULL);
+                    LineTo(hdc, centerX - halfSize, centerY - halfSize);                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+                break;
+
+            case DrawingMode::RECTANGLE:
+                // Draw current rectangle preview
+                if (m_currentPoints.size() == 1) {
+                    // Draw preview rectangle using Windows API for now
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+                    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+                    // Draw rectangle using center and corner point
+                    int centerX = m_currentPoints[0].x;
+                    int centerY = m_currentPoints[0].y;
+                    int cornerX = m_lastMousePos.x;
+                    int cornerY = m_lastMousePos.y;
+                    
+                    // Calculate rectangle corners based on center and corner point
+                    int width = abs(cornerX - centerX) * 2;
+                    int height = abs(cornerY - centerY) * 2;
+                    
+                    Rectangle(hdc, 
+                        centerX - width/2, centerY - height/2,
+                        centerX + width/2, centerY + height/2);
 
                     SelectObject(hdc, oldPen);
                     SelectObject(hdc, oldBrush);
@@ -1462,6 +1610,31 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             int radiusY = abs(shape.points[1].y - shape.points[0].y);
             DrawEllipseBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
         }
+            break;        case DrawingMode::SQUARE:
+        {
+            if (shape.points.size() >= 2) {
+                // Calculate half-size (distance from center to edge)
+                int centerX = shape.points[0].x;
+                int centerY = shape.points[0].y;
+                int halfSize = (int)sqrt(
+                    pow(shape.points[1].x - centerX, 2) +
+                    pow(shape.points[1].y - centerY, 2)
+                );
+                
+                // Draw square using our DrawSquare function
+                DrawSquare(m_offscreenDC, centerX, centerY, halfSize, shape.color);
+            }
+        }
+            break;
+            
+        case DrawingMode::RECTANGLE:
+        {
+            if (shape.points.size() >= 2) {
+                // Draw rectangle using our DrawRectangle function
+                DrawRectangle(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                            shape.points[1].x, shape.points[1].y, shape.color);
+            }
+        }
             break;
             
         case DrawingMode::POLYGON:
@@ -1606,4 +1779,4 @@ namespace GraphicsUtils {
     bool ClipLineToCircle(Point& p1, Point& p2, const Point& center, int radius);
 }
 
-#endif // GRAPHICS_WINDOW_H 
+#endif // GRAPHICS_WINDOW_H

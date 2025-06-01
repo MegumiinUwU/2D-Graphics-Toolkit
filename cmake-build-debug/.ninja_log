@@ -1,0 +1,14 @@
+# ninja log v6
+369	527	7705111129631477	2D-Graphics-Project.exe	7498868fa7f646f6
+48	367	7705077297606029	CMakeFiles/2D-Graphics-Project.dir/MidpointCircle.cpp.obj	ca58f9494f625b51
+55	853	7705077297675686	CMakeFiles/2D-Graphics-Project.dir/ParametricLine.cpp.obj	9b589c4677007c68
+52	377	7705077297645672	CMakeFiles/2D-Graphics-Project.dir/ModifiedMidpointCircle.cpp.obj	508f11e6f72ec515
+35	527	7705077297475677	CMakeFiles/2D-Graphics-Project.dir/BresenhamLine.cpp.obj	990e8080055743e7
+41	532	7705077297535705	CMakeFiles/2D-Graphics-Project.dir/DirectCircle.cpp.obj	2e52b5c10a096870
+44	544	7705077297575712	CMakeFiles/2D-Graphics-Project.dir/IterativePolarCircle.cpp.obj	8cfbfebb29e56c44
+38	552	7705077297505678	CMakeFiles/2D-Graphics-Project.dir/DDALine.cpp.obj	59af08420d2bb1b9
+59	553	7705077297715669	CMakeFiles/2D-Graphics-Project.dir/PolarCircle.cpp.obj	4eb3e7a116385c6b
+16	1467	7705110998836429	CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj	d4831c785c4911c0
+44	369	7705111126377194	CMakeFiles/2D-Graphics-Project.dir/Rectangle.cpp.obj	84bd527a78a14a6d
+21	360	7705103502501098	CMakeFiles/2D-Graphics-Project.dir/Square.cpp.obj	bf2e8c71cb2f224d
+2	311	7705111161322829	build.ninja	dfb20920ac8a3b58
