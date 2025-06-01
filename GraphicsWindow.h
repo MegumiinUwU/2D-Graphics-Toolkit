@@ -52,6 +52,7 @@
 #define MENU_SHAPES_POLYGON   2004
 #define MENU_SHAPES_SQUARE    2005
 #define MENU_SHAPES_RECTANGLE 2006
+#define MENU_SHAPES_CARDINAL_SPLINE 2007
 
 #define MENU_COLORS_RED       3001
 #define MENU_COLORS_GREEN     3002
@@ -351,13 +352,17 @@ void GraphicsWindow::InitializeMenus() {
     // Ellipse submenu
     HMENU hEllipseMenu = CreatePopupMenu();
     AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_DIRECT, "Direct Algorithm");
-    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");
-      // Polygon submenu
+    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");    // Polygon submenu
     HMENU hPolygonMenu = CreatePopupMenu();
     AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
     AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_SQUARE, "Square");
     AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_RECTANGLE, "Rectangle");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hPolygonMenu, "Polygon");
+    
+    // Curve submenu
+    HMENU hCurveMenu = CreatePopupMenu();
+    AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_CARDINAL_SPLINE, "Cardinal Spline");
+    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCurveMenu, "Curve");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapesMenu, "Shapes");
 
     // Colors menu
@@ -518,6 +523,7 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case DrawingMode::POLYGON: modeText += "Polygon"; break;
                 case DrawingMode::SQUARE: modeText += "Square"; break;
                 case DrawingMode::RECTANGLE: modeText += "Rectangle"; break;
+                case DrawingMode::CURVE_CARDINAL: modeText += "Cardinal Spline"; break;
                 default: modeText += "None"; break;
             }
             TextOut(hdc, 10, 30, modeText.c_str(), modeText.length());
@@ -574,11 +580,23 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 }
 
 // Handle mouse click
-void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
-    if (!isLeftButton) {
+void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {    if (!isLeftButton) {
         // Right click - finish current drawing or cancel
         if (m_isDrawing && m_currentDrawingMode == DrawingMode::POLYGON && m_currentPoints.size() >= 3) {
             // Finish polygon
+            Shape shape;
+            shape.mode = m_currentDrawingMode;
+            shape.color = m_currentColor;
+            shape.fillMode = m_currentFillMode;
+            shape.points = m_currentPoints;
+            shape.thickness = m_lineThickness;
+            m_shapes.push_back(shape);
+
+            // Draw directly to offscreen buffer for performance
+            DrawShapeToBuffer(shape);
+        }
+        else if (m_isDrawing && m_currentDrawingMode == DrawingMode::CURVE_CARDINAL && m_currentPoints.size() >= 2) {
+            // Finish Cardinal Spline
             Shape shape;
             shape.mode = m_currentDrawingMode;
             shape.color = m_currentColor;
@@ -878,9 +896,18 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 InvalidateRect(m_hwnd, NULL, TRUE);
             }
         }
+            break;        case DrawingMode::POLYGON:
+        {
+            if (!m_isDrawing) {
+                m_currentPoints.clear();
+                m_isDrawing = true;
+            }
+            m_currentPoints.push_back(newPoint);
+            InvalidateRect(m_hwnd, NULL, TRUE);
+        }
             break;
 
-        case DrawingMode::POLYGON:
+        case DrawingMode::CURVE_CARDINAL:
         {
             if (!m_isDrawing) {
                 m_currentPoints.clear();
@@ -975,10 +1002,12 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
             SetDrawingMode(DrawingMode::POLYGON);
             break;        case MENU_SHAPES_SQUARE:
             SetDrawingMode(DrawingMode::SQUARE);
+            break;        case MENU_SHAPES_RECTANGLE:
+            SetDrawingMode(DrawingMode::RECTANGLE);
             break;
 
-        case MENU_SHAPES_RECTANGLE:
-            SetDrawingMode(DrawingMode::RECTANGLE);
+        case MENU_SHAPES_CARDINAL_SPLINE:
+            SetDrawingMode(DrawingMode::CURVE_CARDINAL);
             break;
 
         case MENU_COLORS_BLACK:
@@ -1376,9 +1405,7 @@ void GraphicsWindow::RedrawAll() {
                     SelectObject(hdc, oldBrush);
                     DeleteObject(tempPen);
                 }
-                break;
-
-            case DrawingMode::POLYGON:
+                break;            case DrawingMode::POLYGON:
                 // Draw current polygon lines using Windows API for now
                 if (m_currentPoints.size() >= 2) {
                     HPEN tempPen = CreatePen(PS_SOLID, 1, m_currentColor);
@@ -1387,6 +1414,51 @@ void GraphicsWindow::RedrawAll() {
                     for (size_t i = 0; i < m_currentPoints.size() - 1; i++) {
                         MoveToEx(hdc, m_currentPoints[i].x, m_currentPoints[i].y, NULL);
                         LineTo(hdc, m_currentPoints[i + 1].x, m_currentPoints[i + 1].y);
+                    }
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+
+                // Draw preview line to mouse cursor
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    MoveToEx(hdc, m_currentPoints.back().x, m_currentPoints.back().y, NULL);
+                    LineTo(hdc, m_lastMousePos.x, m_lastMousePos.y);
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+                break;
+
+            case DrawingMode::CURVE_CARDINAL:
+                // Draw current Cardinal Spline preview
+                if (m_currentPoints.size() >= 2) {
+                    // Convert Point to HermitePoint for preview
+                    HermitePoint* hermitePoints = new HermitePoint[m_currentPoints.size()];
+                    for (size_t i = 0; i < m_currentPoints.size(); i++) {
+                        hermitePoints[i] = HermitePoint(m_currentPoints[i].x, m_currentPoints[i].y);
+                    }
+                    
+                    // Draw Cardinal Spline preview with default tension (0.5) and 50 points per segment
+                    DrawCardinalSpline(hdc, hermitePoints, m_currentPoints.size(), 0.5, 50, m_currentColor);
+                    
+                    delete[] hermitePoints;
+                }
+
+                // Draw points as visual indicators
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_SOLID, 2, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    for (const auto& point : m_currentPoints) {
+                        // Draw small circle at each control point
+                        MoveToEx(hdc, point.x - 3, point.y, NULL);
+                        LineTo(hdc, point.x + 3, point.y);
+                        MoveToEx(hdc, point.x, point.y - 3, NULL);
+                        LineTo(hdc, point.x, point.y + 3);
                     }
 
                     SelectObject(hdc, oldPen);
@@ -1718,8 +1790,7 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             }
         }
             break;
-            
-        case DrawingMode::POLYGON:
+              case DrawingMode::POLYGON:
         {
             if (shape.points.size() >= 3) {
                 // Draw polygon outline
@@ -1748,6 +1819,23 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
                     
                     delete[] pointsArray;
                 }
+            }
+        }
+            break;
+
+        case DrawingMode::CURVE_CARDINAL:
+        {
+            if (shape.points.size() >= 2) {
+                // Convert Point to HermitePoint
+                HermitePoint* hermitePoints = new HermitePoint[shape.points.size()];
+                for (size_t i = 0; i < shape.points.size(); i++) {
+                    hermitePoints[i] = HermitePoint(shape.points[i].x, shape.points[i].y);
+                }
+                
+                // Draw Cardinal Spline with default tension (0.5) and 50 points per segment
+                DrawCardinalSpline(m_offscreenDC, hermitePoints, shape.points.size(), 0.5, 50, shape.color);
+                
+                delete[] hermitePoints;
             }
         }
             break;

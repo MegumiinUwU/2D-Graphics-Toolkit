@@ -28,10 +28,15 @@ void DrawHermiteCurve(
     GetHermiteCoeff(P0.x, T0.x, P1.x, T1.x, xcoeff);
     GetHermiteCoeff(P0.y, T0.y, P1.y, T1.y, ycoeff);
 
+    double dx = P1.x - P0.x;
+    double dy = P1.y - P0.y;
+    double distance = sqrt(dx * dx + dy * dy);
+    
+    int adaptivePoints = std::max(numpoints, std::min(1000, (int)(distance * 2) + 10));
+    
+    double dt = 1.0 / (adaptivePoints - 1);
 
-    double dt = 1.0 / (numpoints - 1);
-
-    for (int i = 0; i < numpoints; ++i) {
+    for (int i = 0; i < adaptivePoints; ++i) {
         double t = i * dt;
         int x = (int)round(EvaluatePolynomial(xcoeff, t));
         int y = (int)round(EvaluatePolynomial(ycoeff, t));
@@ -66,4 +71,42 @@ void FillSquareWithVerticalHermite(
 
         DrawHermiteCurve(hdc, P0, T0, P1, T1, numpoints, color);
     }
+}
+
+void DrawCardinalSpline(HDC hdc, HermitePoint* points, int n, double c, int numPointsPerSegment, COLORREF color) {
+    if (n < 2) return;
+
+    HermitePoint* tangents = new HermitePoint[n];
+
+    // First tangent
+    tangents[0].x = (c / 2.0) * (points[1].x - points[0].x);
+    tangents[0].y = (c / 2.0) * (points[1].y - points[0].y);
+
+    // Middle tangents
+    for (int i = 1; i < n - 1; ++i) {
+        tangents[i].x = (c / 2.0) * (points[i + 1].x - points[i - 1].x);
+        tangents[i].y = (c / 2.0) * (points[i + 1].y - points[i - 1].y);
+    }
+
+    // Last tangent
+    tangents[n - 1].x = (c / 2.0) * (points[n - 1].x - points[n - 2].x);
+    tangents[n - 1].y = (c / 2.0) * (points[n - 1].y - points[n - 2].y);
+
+    for (int i = 0; i < n - 1; ++i) {
+    
+        double dx = points[i + 1].x - points[i].x;
+        double dy = points[i + 1].y - points[i].y;
+        double distance = sqrt(dx * dx + dy * dy);
+        
+    
+        int adaptivePoints = std::max(numPointsPerSegment, std::min(500, (int)(distance * 1.5) + 20));
+        
+        DrawHermiteCurve(hdc,
+                         points[i], tangents[i],
+                         points[i + 1], tangents[i + 1],
+                         adaptivePoints,
+                         color);
+    }
+
+    delete[] tangents;
 }

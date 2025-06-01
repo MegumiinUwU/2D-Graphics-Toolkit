@@ -111,11 +111,11 @@ This phase focuses on implementing various shape-filling techniques.
 - [x] **Task 22: Implement Circle Filling with Circles**
     - Allow user to select a quarter of a circle.
 
-- [ ] **Task 23: Implement Square Filling with Hermite Curve (Vertical)**
+- [x] **Task 23: Implement Square Filling with Hermite Curve (Vertical)**
     - Allow user to draw a square.
     - Fill the square with vertical Hermite curves.
 
-- [ ] **Task 24: Implement Rectangle Filling with Bezier Curve (Horizontal)**
+- [x] **Task 24: Implement Rectangle Filling with Bezier Curve (Horizontal)**
     - Allow user to draw a rectangle.
     - Fill the rectangle with horizontal Bezier curves.
 
@@ -137,7 +137,7 @@ This phase focuses on implementing various shape-filling techniques.
 
 This phase focuses on more advanced drawing and manipulation techniques.
 
-- [ ] **Task 29: Implement Cardinal Spline Curve**
+- [x] **Task 29: Implement Cardinal Spline Curve**
     - Allow user to input control points.
     - Draw a Cardinal spline curve through these points.
     - *Integration:* Adds smooth curve drawing capability.

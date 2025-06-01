@@ -28,7 +28,7 @@ void DrawBezierCurve(HDC hdc, BezierPoint pts[], int numPoints, int steps, COLOR
 }
 
 void FillRectangleWithHorizontalBezier(HDC hdc, int centerX, int centerY, int vertexX, int vertexY, COLORREF color) {
-    // Calculate rectangle boundaries the same way as DrawRectangle
+
     int halfWidth = abs(vertexX - centerX);
     int halfHeight = abs(vertexY - centerY);
     
@@ -40,26 +40,22 @@ void FillRectangleWithHorizontalBezier(HDC hdc, int centerX, int centerY, int ve
     int width = right - left;
     int numpoints = std::max(2, width + 1);
     
-    int spacing = 1; // Vertical spacing between horizontal Bezier curves
+    int spacing = 1;
     
-    // Draw horizontal Bezier curves from top to bottom
+
     for (int y = top; y <= bottom; y += spacing) {
-        // Create 4 control points for a cubic Bezier curve
+       
         BezierPoint controlPoints[4];
         
-        // Start point (left side)
+        
         controlPoints[0] = BezierPoint(left, y);
         
-        // Control point 1 (1/3 of the way across)
         controlPoints[1] = BezierPoint(left + width / 3.0, y);
-        
-        // Control point 2 (2/3 of the way across)
+    
         controlPoints[2] = BezierPoint(left + 2 * width / 3.0, y);
         
-        // End point (right side)
         controlPoints[3] = BezierPoint(right, y);
         
-        // Draw the horizontal Bezier curve
         DrawBezierCurve(hdc, controlPoints, 4, numpoints, color);
     }
 }
