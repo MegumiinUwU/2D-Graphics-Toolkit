@@ -5,4 +5,6 @@
 
 void DrawRectangle(HDC hdc, int centerX, int centerY, int vertexX, int vertexY, COLORREF c);
 
+void FillRectangleWithHorizontalBezier(HDC hdc, int centerX, int centerY, int vertexX, int vertexY, COLORREF color);
+
 #endif

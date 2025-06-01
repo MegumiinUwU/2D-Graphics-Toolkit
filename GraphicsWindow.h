@@ -14,6 +14,7 @@
 #include "SquareAlgorithms.h"
 #include "RectangleAlgorithms.h"
 #include "HermiteAlgorithms.h"
+#include "BezierAlgorithms.h"
 
 
 // ========================================
@@ -70,10 +71,14 @@
 #define MENU_FILL_FLOOD_RECURSIVE  4056
 #define MENU_FILL_FLOOD_NONRECURSIVE 4057
 #define MENU_FILL_SQUARE_HERMITE   4058
+#define MENU_FILL_RECTANGLE_BEZIER 4059
 
 #define MENU_TOOLS_CLEAR      5001
 #define MENU_TOOLS_ZOOM_IN    5002
 #define MENU_TOOLS_ZOOM_OUT   5003
+
+
+using namespace std;
 
 // Drawing modes
 enum class DrawingMode {
@@ -103,12 +108,12 @@ enum class FillMode {
     SCANLINE_NON_CONVEX,
     CIRCLE_FILL_LINES,
     CIRCLE_FILL_QUARTER,
-    CIRCLE_FILL_CIRCLES,
-    POLYGON_CONVEX_FILL,
+    CIRCLE_FILL_CIRCLES,    POLYGON_CONVEX_FILL,
     POLYGON_NONCONVEX_FILL,
     FLOOD_FILL_RECURSIVE_POLYGON,
     FLOOD_FILL_NONRECURSIVE_POLYGON,
-    SQUARE_FILL_HERMITE_VERTICAL
+    SQUARE_FILL_HERMITE_VERTICAL,
+    RECTANGLE_FILL_BEZIER_HORIZONTAL
 };
 
 // Point structure for coordinates
@@ -375,6 +380,7 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_CIRCLES, "Circle Fill Solid");
     AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_SQUARE_HERMITE, "Square Fill with Hermite Curves");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_RECTANGLE_BEZIER, "Rectangle Fill with Bezier Curves");
     AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_CONVEX, "Convex Polygon Fill");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_NONCONVEX, "Non-Convex Polygon Fill");
@@ -482,9 +488,10 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                     TextOut(hdc, 10, 10, "POLYGON FILL: Click near existing polygon to fill it", 50);
                 } else                if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
                            m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
-                    TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 42);
-                } else if (m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
+                    TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 42);                } else if (m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
                     TextOut(hdc, 10, 10, "SQUARE HERMITE FILL: Click inside a square to fill it | Right click to cancel", 75);
+                } else if (m_currentFillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
+                    TextOut(hdc, 10, 10, "RECTANGLE BEZIER FILL: Click inside a rectangle to fill it | Right click to cancel", 80);
                 } else {
                     TextOut(hdc, 10, 10, "FILL MODE: Click inside a circle to fill it | Right click to cancel", 65);
                 }
@@ -525,8 +532,8 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case FillMode::CIRCLE_FILL_CIRCLES: fillText += "Circle Solid"; break;
                 case FillMode::POLYGON_CONVEX_FILL: fillText += "Convex Polygon"; break;                case FillMode::POLYGON_NONCONVEX_FILL: fillText += "Non-Convex Polygon"; break;
                 case FillMode::FLOOD_FILL_RECURSIVE_POLYGON: fillText += "Flood Fill Recursive"; break;
-                case FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON: fillText += "Flood Fill Non-Recursive"; break;
-                case FillMode::SQUARE_FILL_HERMITE_VERTICAL: fillText += "Square Hermite Curves"; break;
+                case FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON: fillText += "Flood Fill Non-Recursive"; break;                case FillMode::SQUARE_FILL_HERMITE_VERTICAL: fillText += "Square Hermite Curves"; break;
+                case FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL: fillText += "Rectangle Bezier Curves"; break;
                 default: fillText += "None"; break;
             }
             TextOut(hdc, 10, 50, fillText.c_str(), fillText.length());
@@ -662,8 +669,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                     return; // Fill the first circle found and exit
                 }
             }
-            
-            // Check if it's a square shape and if click is inside it
+              // Check if it's a square shape and if click is inside it
             if (shape.mode == DrawingMode::SQUARE && 
                 shape.points.size() >= 2 &&
                 m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
@@ -687,6 +693,37 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                     
                     InvalidateRect(m_hwnd, NULL, TRUE);
                     return; // Fill the first square found and exit
+                }
+            }
+              // Check if it's a rectangle shape and if click is inside it
+            if (shape.mode == DrawingMode::RECTANGLE && 
+                shape.points.size() >= 2 &&
+                m_currentFillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
+                
+                // Calculate rectangle boundaries using center/vertex coordinate system
+                int centerX = shape.points[0].x;
+                int centerY = shape.points[0].y;
+                int vertexX = shape.points[1].x;
+                int vertexY = shape.points[1].y;
+                
+                int halfWidth = abs(vertexX - centerX);
+                int halfHeight = abs(vertexY - centerY);
+                
+                int left = centerX - halfWidth;
+                int right = centerX + halfWidth;
+                int top = centerY - halfHeight;
+                int bottom = centerY + halfHeight;
+                
+                // Check if click point is inside this rectangle
+                if (x >= left && x <= right && y >= top && y <= bottom) {
+                    // Update the shape's fill mode
+                    shape.fillMode = m_currentFillMode;
+                    
+                    // Rebuild buffer to ensure proper rendering with fills
+                    RebuildOffscreenBuffer();
+                    
+                    InvalidateRect(m_hwnd, NULL, TRUE);
+                    return; // Fill the first rectangle found and exit
                 }
             }
         }
@@ -814,9 +851,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 InvalidateRect(m_hwnd, NULL, TRUE);
             }
         }
-            break;
-
-        case DrawingMode::RECTANGLE:
+            break;        case DrawingMode::RECTANGLE:
         {
             if (!m_isDrawing) {
                 // Start rectangle (center point)
@@ -830,7 +865,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 Shape shape;
                 shape.mode = m_currentDrawingMode;
                 shape.color = m_currentColor;
-                shape.fillMode = m_currentFillMode;
+                shape.fillMode = FillMode::NONE;  // Always create rectangles empty
                 shape.points = m_currentPoints;
                 shape.thickness = m_lineThickness;
                 m_shapes.push_back(shape);
@@ -1002,10 +1037,12 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
             SetFillMode(FillMode::FLOOD_FILL_RECURSIVE_POLYGON);
             break;        case MENU_FILL_FLOOD_NONRECURSIVE:
             SetFillMode(FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON);
+            break;        case MENU_FILL_SQUARE_HERMITE:
+            SetFillMode(FillMode::SQUARE_FILL_HERMITE_VERTICAL);
             break;
 
-        case MENU_FILL_SQUARE_HERMITE:
-            SetFillMode(FillMode::SQUARE_FILL_HERMITE_VERTICAL);
+        case MENU_FILL_RECTANGLE_BEZIER:
+            SetFillMode(FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL);
             break;
     }
 }
@@ -1430,8 +1467,7 @@ void GraphicsWindow::SetTitle(const std::string& title) {
 }
 
 // Set fill mode
-void GraphicsWindow::SetFillMode(FillMode mode) {
-    m_currentFillMode = mode;
+void GraphicsWindow::SetFillMode(FillMode mode) {    m_currentFillMode = mode;
       // Enable fill mode for circle fill modes and polygon operations
     m_fillMode = (mode == FillMode::CIRCLE_FILL_LINES || 
                   mode == FillMode::CIRCLE_FILL_QUARTER || 
@@ -1440,7 +1476,8 @@ void GraphicsWindow::SetFillMode(FillMode mode) {
                   mode == FillMode::POLYGON_NONCONVEX_FILL ||
                   mode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON ||
                   mode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON ||
-                  mode == FillMode::SQUARE_FILL_HERMITE_VERTICAL);
+                  mode == FillMode::SQUARE_FILL_HERMITE_VERTICAL ||
+                  mode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL);
     
     // Reset drawing state when entering fill mode
     if (m_fillMode) {
@@ -1667,13 +1704,17 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             }
         }
             break;
-            
-        case DrawingMode::RECTANGLE:
+              case DrawingMode::RECTANGLE:
         {
             if (shape.points.size() >= 2) {
                 // Draw rectangle using our DrawRectangle function
                 DrawRectangle(m_offscreenDC, shape.points[0].x, shape.points[0].y,
                             shape.points[1].x, shape.points[1].y, shape.color);
+                  // Apply Bezier fill if set
+                if (shape.fillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
+                    FillRectangleWithHorizontalBezier(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                                                    shape.points[1].x, shape.points[1].y, shape.color);
+                }
             }
         }
             break;

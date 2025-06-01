@@ -16,4 +16,5 @@ add_executable(2D-Graphics-Project
         Square.cpp
         Rectangle.cpp
         HermiteAlgorithms.cpp
+        BezierAlgorithms.cpp
 )

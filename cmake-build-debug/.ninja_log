@@ -1,5 +1,5 @@
 # ninja log v6
-619	772	7705146359706220	2D-Graphics-Project.exe	7d4ea35be0bc9c32
+1335	1491	7705153117269584	2D-Graphics-Project.exe	7d4ea35be0bc9c32
 48	367	7705077297606029	CMakeFiles/2D-Graphics-Project.dir/MidpointCircle.cpp.obj	ca58f9494f625b51
 55	853	7705077297675686	CMakeFiles/2D-Graphics-Project.dir/ParametricLine.cpp.obj	9b589c4677007c68
 52	377	7705077297645672	CMakeFiles/2D-Graphics-Project.dir/ModifiedMidpointCircle.cpp.obj	508f11e6f72ec515
@@ -8,11 +8,16 @@
 44	544	7705077297575712	CMakeFiles/2D-Graphics-Project.dir/IterativePolarCircle.cpp.obj	8cfbfebb29e56c44
 38	552	7705077297505678	CMakeFiles/2D-Graphics-Project.dir/DDALine.cpp.obj	59af08420d2bb1b9
 59	553	7705077297715669	CMakeFiles/2D-Graphics-Project.dir/PolarCircle.cpp.obj	4eb3e7a116385c6b
-25	1263	7705145052651325	CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj	d4831c785c4911c0
+26	1335	7705153104185656	CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj	d4831c785c4911c0
 35	490	7705136282541373	CMakeFiles/2D-Graphics-Project.dir/Rectangle.cpp.obj	84bd527a78a14a6d
 31	518	7705136282501308	CMakeFiles/2D-Graphics-Project.dir/Square.cpp.obj	bf2e8c71cb2f224d
-2	311	7705153033023634	build.ninja	dfb20920ac8a3b58
-27	618	7705146353781878	CMakeFiles/2D-Graphics-Project.dir/HermiteAlgorithms.cpp.obj	e3a4eecd852481dd
+2	311	7705173866305043	build.ninja	dfb20920ac8a3b58
 30	684	7705153104215646	CMakeFiles/2D-Graphics-Project.dir/HermiteAlgorithms.cpp.obj	e3a4eecd852481dd
-26	1335	7705153104185656	CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj	d4831c785c4911c0
-1335	1491	7705153117269584	2D-Graphics-Project.exe	7d4ea35be0bc9c32
+31	826	7705173887329078	CMakeFiles/2D-Graphics-Project.dir/BezierAlgorithms.cpp.obj	f69a7ec32837ac11
+27	1404	7705174230206970	CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj	d4831c785c4911c0
+1404	1603	7705174243980235	2D-Graphics-Project.exe	9ced1004c62c39c8
+33	693	7705175770855229	CMakeFiles/2D-Graphics-Project.dir/BezierAlgorithms.cpp.obj	f69a7ec32837ac11
+29	1341	7705175770815232	CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj	d4831c785c4911c0
+1341	1498	7705175783938234	2D-Graphics-Project.exe	9ced1004c62c39c8
+3	1405	7705177650295802	CMakeFiles/2D-Graphics-Project.dir/demo.cpp.obj	d4831c785c4911c0
+1405	1568	7705177664320826	2D-Graphics-Project.exe	9ced1004c62c39c8
