@@ -11,6 +11,10 @@
 #include "EllipseAlgorithms.h"
 #include "CircleFillAlgorithms.h"
 #include "PolygonFillAlgorithms.h"
+#include "SquareAlgorithms.h"
+#include "RectangleAlgorithms.h"
+#include "HermiteAlgorithms.h"
+#include "BezierAlgorithms.h"
 
 
 // ========================================
@@ -46,6 +50,9 @@
 #define MENU_SHAPES_ELLIPSE_POLAR    2032
 #define MENU_SHAPES_ELLIPSE_MIDPOINT 2033
 #define MENU_SHAPES_POLYGON   2004
+#define MENU_SHAPES_SQUARE    2005
+#define MENU_SHAPES_RECTANGLE 2006
+#define MENU_SHAPES_CARDINAL_SPLINE 2007
 
 #define MENU_COLORS_RED       3001
 #define MENU_COLORS_GREEN     3002
@@ -64,10 +71,19 @@
 #define MENU_FILL_POLYGON_NONCONVEX 4055
 #define MENU_FILL_FLOOD_RECURSIVE  4056
 #define MENU_FILL_FLOOD_NONRECURSIVE 4057
+#define MENU_FILL_SQUARE_HERMITE   4058
+#define MENU_FILL_RECTANGLE_BEZIER 4059
 
 #define MENU_TOOLS_CLEAR      5001
 #define MENU_TOOLS_ZOOM_IN    5002
 #define MENU_TOOLS_ZOOM_OUT   5003
+
+#define MENU_CURSOR_ARROW     6001
+#define MENU_CURSOR_HAND      6002
+#define MENU_CURSOR_CROSSHAIR 6003
+
+
+using namespace std;
 
 // Drawing modes
 enum class DrawingMode {
@@ -79,10 +95,10 @@ enum class DrawingMode {
     CIRCLE_ITERATIVE_POLAR,
     CIRCLE_MIDPOINT,
     CIRCLE_MODIFIED_MIDPOINT,
-    ELLIPSE_DIRECT,
-    ELLIPSE_POLAR,
-    ELLIPSE_MIDPOINT,
+    ELLIPSE_DIRECT,    ELLIPSE_POLAR,    ELLIPSE_MIDPOINT,
     POLYGON,
+    SQUARE,
+    RECTANGLE,
     CURVE_CARDINAL,
     NONE
 };
@@ -97,11 +113,12 @@ enum class FillMode {
     SCANLINE_NON_CONVEX,
     CIRCLE_FILL_LINES,
     CIRCLE_FILL_QUARTER,
-    CIRCLE_FILL_CIRCLES,
-    POLYGON_CONVEX_FILL,
+    CIRCLE_FILL_CIRCLES,    POLYGON_CONVEX_FILL,
     POLYGON_NONCONVEX_FILL,
     FLOOD_FILL_RECURSIVE_POLYGON,
-    FLOOD_FILL_NONRECURSIVE_POLYGON
+    FLOOD_FILL_NONRECURSIVE_POLYGON,
+    SQUARE_FILL_HERMITE_VERTICAL,
+    RECTANGLE_FILL_BEZIER_HORIZONTAL
 };
 
 // Point structure for coordinates
@@ -151,6 +168,9 @@ private:
     std::vector<Point> m_currentPoints;
     Point m_lastMousePos;
     
+    // Rectangle dragging state
+    bool m_isDraggingRectangle;
+    
     // Polygon drawing state
     std::vector<PolygonPoint> m_polygonPoints;
     bool m_isDrawingPolygon;
@@ -161,10 +181,11 @@ private:
     // Pens and brushes
     HPEN m_currentPen;
     HBRUSH m_currentBrush;
-    HBRUSH m_backgroundBrush;
-
-    // Menu handle
+    HBRUSH m_backgroundBrush;    // Menu handle
     HMENU m_hMenuBar;
+
+    // Cursor handle
+    HCURSOR m_currentCursor;
 
     // Window class name
     static const char* s_className;
@@ -202,13 +223,12 @@ public:
     bool Initialize(HINSTANCE hInstance, int nCmdShow);
     void Run();
     void SetTitle(const std::string& title);
-    void SetBackgroundColor(COLORREF color);
-
-    // Drawing mode setters
+    void SetBackgroundColor(COLORREF color);    // Drawing mode setters
     void SetDrawingMode(DrawingMode mode);
     void SetFillMode(FillMode mode);
     void SetDrawingColor(COLORREF color);
     void SetLineThickness(int thickness);
+    void SetMouseCursor(HCURSOR cursor);
 
     // Utility methods
     HWND GetHandle() const { return m_hwnd; }
@@ -240,9 +260,9 @@ GraphicsWindow::GraphicsWindow()
         , m_lineThickness(1)
         , m_isDrawing(false)
         , m_currentPen(nullptr)
-        , m_currentBrush(nullptr)
-        , m_backgroundBrush(nullptr)
+        , m_currentBrush(nullptr)        , m_backgroundBrush(nullptr)
         , m_hMenuBar(nullptr)
+        , m_currentCursor(LoadCursor(NULL, IDC_CROSS))
         , m_fillMode(false)
         , m_isDrawingPolygon(false)
 {
@@ -264,17 +284,14 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // Register window class
     WNDCLASS wc = {0};
     wc.lpfnWndProc = StaticWndProc;
-    wc.hInstance = hInstance;
-    wc.hbrBackground = CreateSolidBrush(m_backgroundColor);
+    wc.hInstance = hInstance;    wc.hbrBackground = CreateSolidBrush(m_backgroundColor);
     wc.lpszClassName = s_className;
-    wc.hCursor = LoadCursor(NULL, IDC_CROSS);  // Custom cursor for drawing
+    wc.hCursor = m_currentCursor;  // Use current cursor
     wc.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;  // Add CS_OWNDC for better performance
 
     if (!RegisterClass(&wc)) {
         return false;
-    }
-
-    // Create window
+    }    // Create window
     m_hwnd = CreateWindow(
             s_className,
             "2D Graphics Drawing Program",
@@ -286,17 +303,23 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     if (!m_hwnd) {
         return false;
-    }
-
-    // Initialize menus and drawing tools
+    }    // Initialize menus and drawing tools
     InitializeMenus();
     InitializeDrawingTools();
 
     // Create offscreen buffer for double buffering
     CreateOffscreenBuffer(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT);
 
+    // Show window with proper visibility and focus
     ShowWindow(m_hwnd, nCmdShow);
     UpdateWindow(m_hwnd);
+    
+    // Ensure window stays visible and gets focus
+    SetWindowPos(m_hwnd, HWND_TOP, 0, 0, 0, 0, 
+                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetForegroundWindow(m_hwnd);
+    SetActiveWindow(m_hwnd);
+    SetFocus(m_hwnd);
 
     return true;
 }
@@ -336,11 +359,17 @@ void GraphicsWindow::InitializeMenus() {
     // Ellipse submenu
     HMENU hEllipseMenu = CreatePopupMenu();
     AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_DIRECT, "Direct Algorithm");
-    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");
-    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");
-    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");
+    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");    // Polygon submenu
+    HMENU hPolygonMenu = CreatePopupMenu();
+    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
+    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_SQUARE, "Square");
+    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_RECTANGLE, "Rectangle");
+    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hPolygonMenu, "Polygon");
     
-    AppendMenu(hShapesMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
+    // Curve submenu
+    HMENU hCurveMenu = CreatePopupMenu();
+    AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_CARDINAL_SPLINE, "Cardinal Spline");
+    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCurveMenu, "Curve");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapesMenu, "Shapes");
 
     // Colors menu
@@ -358,23 +387,30 @@ void GraphicsWindow::InitializeMenus() {
     HMENU hFillMenu = CreatePopupMenu();
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_NONE, "None");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_SOLID, "Solid");
-    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_LINES, "Circle Fill with Lines");
+    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_LINES, "Circle Fill with Lines");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_QUARTER, "Circle Fill Quarter");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_CIRCLES, "Circle Fill Solid");
+    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_SQUARE_HERMITE, "Square Fill with Hermite Curves");
+    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_RECTANGLE_BEZIER, "Rectangle Fill with Bezier Curves");
     AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_CONVEX, "Convex Polygon Fill");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_NONCONVEX, "Non-Convex Polygon Fill");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_RECURSIVE, "Flood Fill Recursive");
     AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_NONRECURSIVE, "Flood Fill Non-Recursive");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFillMenu, "Fill");
-
-    // Tools menu
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFillMenu, "Fill");    // Tools menu
     HMENU hToolsMenu = CreatePopupMenu();
     AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_CLEAR, "Clear Canvas\tCtrl+L");
     AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_IN, "Zoom In\tCtrl+I");
     AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_OUT, "Zoom Out\tCtrl+O");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, "Tools");
+
+    // Cursor menu
+    HMENU hCursorMenu = CreatePopupMenu();
+    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_ARROW, "Arrow");
+    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_HAND, "Hand");
+    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_CROSSHAIR, "Crosshair");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hCursorMenu, "Cursor");
 
     SetMenu(m_hwnd, m_hMenuBar);
 }
@@ -439,15 +475,20 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             int y = HIWORD(lParam);
             HandleMouseClick(x, y, false);
         }
-            break;
-
-        case WM_MOUSEMOVE:
+            break;        case WM_MOUSEMOVE:
         {
             int x = LOWORD(lParam);
             int y = HIWORD(lParam);
             HandleMouseMove(x, y);
         }
             break;
+
+        case WM_SETCURSOR:
+            if (LOWORD(lParam) == HTCLIENT) {
+                ::SetCursor(m_currentCursor);
+                return TRUE;
+            }
+            return DefWindowProc(hwnd, message, wParam, lParam);
 
         case WM_PAINT:
         {
@@ -467,9 +508,12 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL || 
                     m_currentFillMode == FillMode::POLYGON_NONCONVEX_FILL) {
                     TextOut(hdc, 10, 10, "POLYGON FILL: Click near existing polygon to fill it", 50);
-                } else if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
+                } else                if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
                            m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
-                    TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 42);
+                    TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 42);                } else if (m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
+                    TextOut(hdc, 10, 10, "SQUARE HERMITE FILL: Click inside a square to fill it | Right click to cancel", 75);
+                } else if (m_currentFillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
+                    TextOut(hdc, 10, 10, "RECTANGLE BEZIER FILL: Click inside a rectangle to fill it | Right click to cancel", 80);
                 } else {
                     TextOut(hdc, 10, 10, "FILL MODE: Click inside a circle to fill it | Right click to cancel", 65);
                 }
@@ -492,9 +536,11 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case DrawingMode::CIRCLE_MIDPOINT: modeText += "Circle (Midpoint)"; break;
                 case DrawingMode::CIRCLE_MODIFIED_MIDPOINT: modeText += "Circle (Modified Midpoint)"; break;
                 case DrawingMode::ELLIPSE_DIRECT: modeText += "Ellipse (Direct)"; break;
-                case DrawingMode::ELLIPSE_POLAR: modeText += "Ellipse (Polar)"; break;
-                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse (Midpoint)"; break;
+                case DrawingMode::ELLIPSE_POLAR: modeText += "Ellipse (Polar)"; break;                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse (Midpoint)"; break;
                 case DrawingMode::POLYGON: modeText += "Polygon"; break;
+                case DrawingMode::SQUARE: modeText += "Square"; break;
+                case DrawingMode::RECTANGLE: modeText += "Rectangle"; break;
+                case DrawingMode::CURVE_CARDINAL: modeText += "Cardinal Spline"; break;
                 default: modeText += "None"; break;
             }
             TextOut(hdc, 10, 30, modeText.c_str(), modeText.length());
@@ -507,10 +553,10 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case FillMode::CIRCLE_FILL_LINES: fillText += "Circle Lines"; break;
                 case FillMode::CIRCLE_FILL_QUARTER: fillText += "Circle Quarter"; break;
                 case FillMode::CIRCLE_FILL_CIRCLES: fillText += "Circle Solid"; break;
-                case FillMode::POLYGON_CONVEX_FILL: fillText += "Convex Polygon"; break;
-                case FillMode::POLYGON_NONCONVEX_FILL: fillText += "Non-Convex Polygon"; break;
+                case FillMode::POLYGON_CONVEX_FILL: fillText += "Convex Polygon"; break;                case FillMode::POLYGON_NONCONVEX_FILL: fillText += "Non-Convex Polygon"; break;
                 case FillMode::FLOOD_FILL_RECURSIVE_POLYGON: fillText += "Flood Fill Recursive"; break;
-                case FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON: fillText += "Flood Fill Non-Recursive"; break;
+                case FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON: fillText += "Flood Fill Non-Recursive"; break;                case FillMode::SQUARE_FILL_HERMITE_VERTICAL: fillText += "Square Hermite Curves"; break;
+                case FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL: fillText += "Rectangle Bezier Curves"; break;
                 default: fillText += "None"; break;
             }
             TextOut(hdc, 10, 50, fillText.c_str(), fillText.length());
@@ -551,11 +597,23 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 }
 
 // Handle mouse click
-void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
-    if (!isLeftButton) {
+void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {    if (!isLeftButton) {
         // Right click - finish current drawing or cancel
         if (m_isDrawing && m_currentDrawingMode == DrawingMode::POLYGON && m_currentPoints.size() >= 3) {
             // Finish polygon
+            Shape shape;
+            shape.mode = m_currentDrawingMode;
+            shape.color = m_currentColor;
+            shape.fillMode = m_currentFillMode;
+            shape.points = m_currentPoints;
+            shape.thickness = m_lineThickness;
+            m_shapes.push_back(shape);
+
+            // Draw directly to offscreen buffer for performance
+            DrawShapeToBuffer(shape);
+        }
+        else if (m_isDrawing && m_currentDrawingMode == DrawingMode::CURVE_CARDINAL && m_currentPoints.size() >= 2) {
+            // Finish Cardinal Spline
             Shape shape;
             shape.mode = m_currentDrawingMode;
             shape.color = m_currentColor;
@@ -619,8 +677,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             }
             return;
         }
-        
-        for (auto& shape : m_shapes) {
+          for (auto& shape : m_shapes) {
             // Check if it's a circle shape and if click is inside it
             if ((shape.mode == DrawingMode::CIRCLE_DIRECT ||
                  shape.mode == DrawingMode::CIRCLE_POLAR ||
@@ -645,6 +702,63 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                     
                     InvalidateRect(m_hwnd, NULL, TRUE);
                     return; // Fill the first circle found and exit
+                }
+            }
+              // Check if it's a square shape and if click is inside it
+            if (shape.mode == DrawingMode::SQUARE && 
+                shape.points.size() >= 2 &&
+                m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
+                
+                // Calculate square boundaries
+                int centerX = shape.points[0].x;
+                int centerY = shape.points[0].y;
+                int halfSize = (int)sqrt(
+                    pow(shape.points[1].x - centerX, 2) +
+                    pow(shape.points[1].y - centerY, 2)
+                );
+                
+                // Check if click point is inside this square
+                if (x >= centerX - halfSize && x <= centerX + halfSize &&
+                    y >= centerY - halfSize && y <= centerY + halfSize) {
+                    // Update the shape's fill mode
+                    shape.fillMode = m_currentFillMode;
+                    
+                    // Rebuild buffer to ensure proper rendering with fills
+                    RebuildOffscreenBuffer();
+                    
+                    InvalidateRect(m_hwnd, NULL, TRUE);
+                    return; // Fill the first square found and exit
+                }
+            }
+              // Check if it's a rectangle shape and if click is inside it
+            if (shape.mode == DrawingMode::RECTANGLE && 
+                shape.points.size() >= 2 &&
+                m_currentFillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
+                
+                // Calculate rectangle boundaries using center/vertex coordinate system
+                int centerX = shape.points[0].x;
+                int centerY = shape.points[0].y;
+                int vertexX = shape.points[1].x;
+                int vertexY = shape.points[1].y;
+                
+                int halfWidth = abs(vertexX - centerX);
+                int halfHeight = abs(vertexY - centerY);
+                
+                int left = centerX - halfWidth;
+                int right = centerX + halfWidth;
+                int top = centerY - halfHeight;
+                int bottom = centerY + halfHeight;
+                
+                // Check if click point is inside this rectangle
+                if (x >= left && x <= right && y >= top && y <= bottom) {
+                    // Update the shape's fill mode
+                    shape.fillMode = m_currentFillMode;
+                    
+                    // Rebuild buffer to ensure proper rendering with fills
+                    RebuildOffscreenBuffer();
+                    
+                    InvalidateRect(m_hwnd, NULL, TRUE);
+                    return; // Fill the first rectangle found and exit
                 }
             }
         }
@@ -746,9 +860,71 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 InvalidateRect(m_hwnd, NULL, TRUE);
             }
         }
+            break;        case DrawingMode::SQUARE:
+        {
+            if (!m_isDrawing) {
+                // Start square (center point)
+                m_currentPoints.clear();
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;            } else {
+                // Finish square (edge point to define half-size)
+                m_currentPoints.push_back(newPoint);
+
+                Shape shape;
+                shape.mode = m_currentDrawingMode;
+                shape.color = m_currentColor;
+                shape.fillMode = FillMode::NONE;  // Always create squares empty
+                shape.points = m_currentPoints;
+                shape.thickness = m_lineThickness;
+                m_shapes.push_back(shape);
+
+                // Draw directly to offscreen buffer for performance
+                DrawShapeToBuffer(shape);
+
+                m_isDrawing = false;
+                m_currentPoints.clear();
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+        }
+            break;        case DrawingMode::RECTANGLE:
+        {
+            if (!m_isDrawing) {
+                // Start rectangle (center point)
+                m_currentPoints.clear();
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;
+            } else {
+                // Finish rectangle (corner point to define dimensions)
+                m_currentPoints.push_back(newPoint);
+
+                Shape shape;
+                shape.mode = m_currentDrawingMode;
+                shape.color = m_currentColor;
+                shape.fillMode = FillMode::NONE;  // Always create rectangles empty
+                shape.points = m_currentPoints;
+                shape.thickness = m_lineThickness;
+                m_shapes.push_back(shape);
+
+                // Draw directly to offscreen buffer for performance
+                DrawShapeToBuffer(shape);
+
+                m_isDrawing = false;
+                m_currentPoints.clear();
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+        }
+            break;        case DrawingMode::POLYGON:
+        {
+            if (!m_isDrawing) {
+                m_currentPoints.clear();
+                m_isDrawing = true;
+            }
+            m_currentPoints.push_back(newPoint);
+            InvalidateRect(m_hwnd, NULL, TRUE);
+        }
             break;
 
-        case DrawingMode::POLYGON:
+        case DrawingMode::CURVE_CARDINAL:
         {
             if (!m_isDrawing) {
                 m_currentPoints.clear();
@@ -839,10 +1015,16 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
 
         case MENU_SHAPES_ELLIPSE_MIDPOINT:
             SetDrawingMode(DrawingMode::ELLIPSE_MIDPOINT);
+            break;        case MENU_SHAPES_POLYGON:
+            SetDrawingMode(DrawingMode::POLYGON);
+            break;        case MENU_SHAPES_SQUARE:
+            SetDrawingMode(DrawingMode::SQUARE);
+            break;        case MENU_SHAPES_RECTANGLE:
+            SetDrawingMode(DrawingMode::RECTANGLE);
             break;
 
-        case MENU_SHAPES_POLYGON:
-            SetDrawingMode(DrawingMode::POLYGON);
+        case MENU_SHAPES_CARDINAL_SPLINE:
+            SetDrawingMode(DrawingMode::CURVE_CARDINAL);
             break;
 
         case MENU_COLORS_BLACK:
@@ -863,10 +1045,20 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
 
         case MENU_COLORS_WHITE:
             SetDrawingColor(RGB(255, 255, 255));
+            break;        case MENU_TOOLS_CLEAR:
+            ClearCanvas();
             break;
 
-        case MENU_TOOLS_CLEAR:
-            ClearCanvas();
+        case MENU_CURSOR_ARROW:
+            SetMouseCursor(LoadCursor(NULL, IDC_ARROW));
+            break;
+
+        case MENU_CURSOR_HAND:
+            SetMouseCursor(LoadCursor(NULL, IDC_HAND));
+            break;
+
+        case MENU_CURSOR_CROSSHAIR:
+            SetMouseCursor(LoadCursor(NULL, IDC_CROSS));
             break;
 
         case MENU_FILL_NONE:
@@ -899,10 +1091,14 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
 
         case MENU_FILL_FLOOD_RECURSIVE:
             SetFillMode(FillMode::FLOOD_FILL_RECURSIVE_POLYGON);
+            break;        case MENU_FILL_FLOOD_NONRECURSIVE:
+            SetFillMode(FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON);
+            break;        case MENU_FILL_SQUARE_HERMITE:
+            SetFillMode(FillMode::SQUARE_FILL_HERMITE_VERTICAL);
             break;
 
-        case MENU_FILL_FLOOD_NONRECURSIVE:
-            SetFillMode(FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON);
+        case MENU_FILL_RECTANGLE_BEZIER:
+            SetFillMode(FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL);
             break;
     }
 }
@@ -1047,8 +1243,37 @@ void GraphicsWindow::RedrawAll() {
                     int radiusY = abs(shape.points[1].y - shape.points[0].y);
                     DrawEllipseBresenham(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
                 }
+                    break;                case DrawingMode::SQUARE:
+                {
+                    if (shape.points.size() >= 2) {
+                        // Calculate half-size (distance from center to edge)
+                        int centerX = shape.points[0].x;
+                        int centerY = shape.points[0].y;
+                        int halfSize = (int)sqrt(
+                            pow(shape.points[1].x - centerX, 2) +
+                            pow(shape.points[1].y - centerY, 2)
+                        );
+                        
+                        // Draw square using our DrawSquare function
+                        DrawSquare(hdc, centerX, centerY, halfSize, shape.color);
+                          // Apply Hermite fill if set
+                        if (shape.fillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
+                            FillSquareWithVerticalHermite(hdc, centerX, centerY, halfSize, shape.color);
+                        }
+                    }
+                }
                     break;
-                    
+                
+                case DrawingMode::RECTANGLE:
+                {
+                    if (shape.points.size() >= 2) {
+                        // Draw rectangle using our DrawRectangle function
+                        DrawRectangle(hdc, shape.points[0].x, shape.points[0].y,
+                                    shape.points[1].x, shape.points[1].y, shape.color);
+                    }
+                }
+                    break;
+                
                 case DrawingMode::POLYGON:
                 {
                     if (shape.points.size() >= 3) {
@@ -1081,7 +1306,7 @@ void GraphicsWindow::RedrawAll() {
                     }
                 }
                     break;
-                    
+                
                 default:
                     // TODO: Implement other shape algorithms
                     break;
@@ -1154,9 +1379,60 @@ void GraphicsWindow::RedrawAll() {
                     SelectObject(hdc, oldBrush);
                     DeleteObject(tempPen);
                 }
+                break;            case DrawingMode::SQUARE:
+                // Draw current square preview
+                if (m_currentPoints.size() == 1) {
+                    // Calculate half-size (distance from center to mouse position)
+                    int centerX = m_currentPoints[0].x;
+                    int centerY = m_currentPoints[0].y;
+                    int halfSize = (int)sqrt(
+                        pow(m_lastMousePos.x - centerX, 2) +
+                        pow(m_lastMousePos.y - centerY, 2)
+                    );
+                    
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    // Draw square preview using lines
+                    MoveToEx(hdc, centerX - halfSize, centerY - halfSize, NULL);
+                    LineTo(hdc, centerX + halfSize, centerY - halfSize);
+                    MoveToEx(hdc, centerX + halfSize, centerY - halfSize, NULL);
+                    LineTo(hdc, centerX + halfSize, centerY + halfSize);
+                    MoveToEx(hdc, centerX + halfSize, centerY + halfSize, NULL);
+                    LineTo(hdc, centerX - halfSize, centerY + halfSize);
+                    MoveToEx(hdc, centerX - halfSize, centerY + halfSize, NULL);
+                    LineTo(hdc, centerX - halfSize, centerY - halfSize);                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
                 break;
 
-            case DrawingMode::POLYGON:
+            case DrawingMode::RECTANGLE:
+                // Draw current rectangle preview
+                if (m_currentPoints.size() == 1) {
+                    // Draw preview rectangle using Windows API for now
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+                    HBRUSH oldBrush = (HBRUSH)SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+                    // Draw rectangle using center and corner point
+                    int centerX = m_currentPoints[0].x;
+                    int centerY = m_currentPoints[0].y;
+                    int cornerX = m_lastMousePos.x;
+                    int cornerY = m_lastMousePos.y;
+                    
+                    // Calculate rectangle corners based on center and corner point
+                    int width = abs(cornerX - centerX) * 2;
+                    int height = abs(cornerY - centerY) * 2;
+                    
+                    Rectangle(hdc, 
+                        centerX - width/2, centerY - height/2,
+                        centerX + width/2, centerY + height/2);
+
+                    SelectObject(hdc, oldPen);
+                    SelectObject(hdc, oldBrush);
+                    DeleteObject(tempPen);
+                }
+                break;            case DrawingMode::POLYGON:
                 // Draw current polygon lines using Windows API for now
                 if (m_currentPoints.size() >= 2) {
                     HPEN tempPen = CreatePen(PS_SOLID, 1, m_currentColor);
@@ -1165,6 +1441,51 @@ void GraphicsWindow::RedrawAll() {
                     for (size_t i = 0; i < m_currentPoints.size() - 1; i++) {
                         MoveToEx(hdc, m_currentPoints[i].x, m_currentPoints[i].y, NULL);
                         LineTo(hdc, m_currentPoints[i + 1].x, m_currentPoints[i + 1].y);
+                    }
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+
+                // Draw preview line to mouse cursor
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    MoveToEx(hdc, m_currentPoints.back().x, m_currentPoints.back().y, NULL);
+                    LineTo(hdc, m_lastMousePos.x, m_lastMousePos.y);
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+                break;
+
+            case DrawingMode::CURVE_CARDINAL:
+                // Draw current Cardinal Spline preview
+                if (m_currentPoints.size() >= 2) {
+                    // Convert Point to HermitePoint for preview
+                    HermitePoint* hermitePoints = new HermitePoint[m_currentPoints.size()];
+                    for (size_t i = 0; i < m_currentPoints.size(); i++) {
+                        hermitePoints[i] = HermitePoint(m_currentPoints[i].x, m_currentPoints[i].y);
+                    }
+                    
+                    // Draw Cardinal Spline preview with default tension (0.5) and 50 points per segment
+                    DrawCardinalSpline(hdc, hermitePoints, m_currentPoints.size(), 0.5, 50, m_currentColor);
+                    
+                    delete[] hermitePoints;
+                }
+
+                // Draw points as visual indicators
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_SOLID, 2, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    for (const auto& point : m_currentPoints) {
+                        // Draw small circle at each control point
+                        MoveToEx(hdc, point.x - 3, point.y, NULL);
+                        LineTo(hdc, point.x + 3, point.y);
+                        MoveToEx(hdc, point.x, point.y - 3, NULL);
+                        LineTo(hdc, point.x, point.y + 3);
                     }
 
                     SelectObject(hdc, oldPen);
@@ -1244,18 +1565,27 @@ void GraphicsWindow::SetTitle(const std::string& title) {
     }
 }
 
+// Set mouse cursor
+void GraphicsWindow::SetMouseCursor(HCURSOR cursor) {
+    m_currentCursor = cursor;
+    if (m_hwnd) {
+        SetClassLongPtr(m_hwnd, GCLP_HCURSOR, (LONG_PTR)cursor);
+        ::SetCursor(cursor);
+    }
+}
+
 // Set fill mode
-void GraphicsWindow::SetFillMode(FillMode mode) {
-    m_currentFillMode = mode;
-    
-    // Enable fill mode for circle fill modes and polygon operations
+void GraphicsWindow::SetFillMode(FillMode mode) {    m_currentFillMode = mode;
+      // Enable fill mode for circle fill modes and polygon operations
     m_fillMode = (mode == FillMode::CIRCLE_FILL_LINES || 
                   mode == FillMode::CIRCLE_FILL_QUARTER || 
                   mode == FillMode::CIRCLE_FILL_CIRCLES ||
                   mode == FillMode::POLYGON_CONVEX_FILL ||
                   mode == FillMode::POLYGON_NONCONVEX_FILL ||
                   mode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON ||
-                  mode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON);
+                  mode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON ||
+                  mode == FillMode::SQUARE_FILL_HERMITE_VERTICAL ||
+                  mode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL);
     
     // Reset drawing state when entering fill mode
     if (m_fillMode) {
@@ -1462,9 +1792,41 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             int radiusY = abs(shape.points[1].y - shape.points[0].y);
             DrawEllipseBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
         }
+            break;        case DrawingMode::SQUARE:
+        {
+            if (shape.points.size() >= 2) {
+                // Calculate half-size (distance from center to edge)
+                int centerX = shape.points[0].x;
+                int centerY = shape.points[0].y;
+                int halfSize = (int)sqrt(
+                    pow(shape.points[1].x - centerX, 2) +
+                    pow(shape.points[1].y - centerY, 2)
+                );
+                
+                // Draw square using our DrawSquare function
+                DrawSquare(m_offscreenDC, centerX, centerY, halfSize, shape.color);
+                  // Apply Hermite fill if set
+                if (shape.fillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
+                    FillSquareWithVerticalHermite(m_offscreenDC, centerX, centerY, halfSize, shape.color);
+                }
+            }
+        }
             break;
-            
-        case DrawingMode::POLYGON:
+              case DrawingMode::RECTANGLE:
+        {
+            if (shape.points.size() >= 2) {
+                // Draw rectangle using our DrawRectangle function
+                DrawRectangle(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                            shape.points[1].x, shape.points[1].y, shape.color);
+                  // Apply Bezier fill if set
+                if (shape.fillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
+                    FillRectangleWithHorizontalBezier(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                                                    shape.points[1].x, shape.points[1].y, shape.color);
+                }
+            }
+        }
+            break;
+              case DrawingMode::POLYGON:
         {
             if (shape.points.size() >= 3) {
                 // Draw polygon outline
@@ -1493,6 +1855,23 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
                     
                     delete[] pointsArray;
                 }
+            }
+        }
+            break;
+
+        case DrawingMode::CURVE_CARDINAL:
+        {
+            if (shape.points.size() >= 2) {
+                // Convert Point to HermitePoint
+                HermitePoint* hermitePoints = new HermitePoint[shape.points.size()];
+                for (size_t i = 0; i < shape.points.size(); i++) {
+                    hermitePoints[i] = HermitePoint(shape.points[i].x, shape.points[i].y);
+                }
+                
+                // Draw Cardinal Spline with default tension (0.5) and 50 points per segment
+                DrawCardinalSpline(m_offscreenDC, hermitePoints, shape.points.size(), 0.5, 50, shape.color);
+                
+                delete[] hermitePoints;
             }
         }
             break;
@@ -1606,4 +1985,4 @@ namespace GraphicsUtils {
     bool ClipLineToCircle(Point& p1, Point& p2, const Point& center, int radius);
 }
 
-#endif // GRAPHICS_WINDOW_H 
+#endif // GRAPHICS_WINDOW_H
