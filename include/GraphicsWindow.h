@@ -606,7 +606,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             Shape shape;
             shape.mode = m_currentDrawingMode;
             shape.color = m_currentColor;
-            shape.fillMode = m_currentFillMode;
+            shape.fillMode = FillMode::NONE;  // Always create polygons empty
             shape.points = m_currentPoints;
             shape.thickness = m_lineThickness;
             m_shapes.push_back(shape);
