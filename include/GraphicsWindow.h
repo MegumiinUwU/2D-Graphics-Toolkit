@@ -58,6 +58,8 @@
 #define MENU_SHAPES_SQUARE    2005
 #define MENU_SHAPES_RECTANGLE 2006
 #define MENU_SHAPES_CARDINAL_SPLINE 2007
+#define MENU_SHAPES_BEZIER_CURVE 2008
+#define MENU_SHAPES_HERMITE_CURVE 2009
 
 #define MENU_COLORS_RED       3001
 #define MENU_COLORS_GREEN     3002
@@ -101,10 +103,11 @@ enum class DrawingMode {
     CIRCLE_MIDPOINT,
     CIRCLE_MODIFIED_MIDPOINT,
     ELLIPSE_DIRECT,    ELLIPSE_POLAR,    ELLIPSE_MIDPOINT,
-    POLYGON,
-    SQUARE,
+    POLYGON,    SQUARE,
     RECTANGLE,
     CURVE_CARDINAL,
+    CURVE_BEZIER,
+    CURVE_HERMITE,
     NONE
 };
 
@@ -366,10 +369,11 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_SQUARE, "Square");
     AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_RECTANGLE, "Rectangle");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hPolygonMenu, "Polygon");
-    
-    // Curve submenu
+      // Curve submenu
     HMENU hCurveMenu = CreatePopupMenu();
     AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_CARDINAL_SPLINE, "Cardinal Spline");
+    AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_BEZIER_CURVE, "Bezier Curve");
+    AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_HERMITE_CURVE, "Hermite Curve");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCurveMenu, "Curve");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapesMenu, "Shapes");
 
@@ -537,11 +541,12 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
                 case DrawingMode::CIRCLE_MIDPOINT: modeText += "Circle (Midpoint)"; break;
                 case DrawingMode::CIRCLE_MODIFIED_MIDPOINT: modeText += "Circle (Modified Midpoint)"; break;
                 case DrawingMode::ELLIPSE_DIRECT: modeText += "Ellipse (Direct)"; break;
-                case DrawingMode::ELLIPSE_POLAR: modeText += "Ellipse (Polar)"; break;                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse (Midpoint)"; break;
-                case DrawingMode::POLYGON: modeText += "Polygon"; break;
+                case DrawingMode::ELLIPSE_POLAR: modeText += "Ellipse (Polar)"; break;                case DrawingMode::ELLIPSE_MIDPOINT: modeText += "Ellipse (Midpoint)"; break;                case DrawingMode::POLYGON: modeText += "Polygon"; break;
                 case DrawingMode::SQUARE: modeText += "Square"; break;
                 case DrawingMode::RECTANGLE: modeText += "Rectangle"; break;
                 case DrawingMode::CURVE_CARDINAL: modeText += "Cardinal Spline"; break;
+                case DrawingMode::CURVE_BEZIER: modeText += "Bezier Curve"; break;
+                case DrawingMode::CURVE_HERMITE: modeText += "Hermite Curve"; break;
                 default: modeText += "None"; break;
             }
             TextOut(hdc, 10, 30, modeText.c_str(), modeText.length());
@@ -613,9 +618,34 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
 
             // Draw directly to offscreen buffer for performance
             DrawShapeToBuffer(shape);
-        }
-        else if (m_isDrawing && m_currentDrawingMode == DrawingMode::CURVE_CARDINAL && m_currentPoints.size() >= 2) {
+        }        else if (m_isDrawing && m_currentDrawingMode == DrawingMode::CURVE_CARDINAL && m_currentPoints.size() >= 2) {
             // Finish Cardinal Spline
+            Shape shape;
+            shape.mode = m_currentDrawingMode;
+            shape.color = m_currentColor;
+            shape.fillMode = m_currentFillMode;
+            shape.points = m_currentPoints;
+            shape.thickness = m_lineThickness;
+            m_shapes.push_back(shape);
+
+            // Draw directly to offscreen buffer for performance
+            DrawShapeToBuffer(shape);
+        }
+        else if (m_isDrawing && m_currentDrawingMode == DrawingMode::CURVE_BEZIER && m_currentPoints.size() >= 2) {
+            // Finish Bezier Curve
+            Shape shape;
+            shape.mode = m_currentDrawingMode;
+            shape.color = m_currentColor;
+            shape.fillMode = m_currentFillMode;
+            shape.points = m_currentPoints;
+            shape.thickness = m_lineThickness;
+            m_shapes.push_back(shape);
+
+            // Draw directly to offscreen buffer for performance
+            DrawShapeToBuffer(shape);
+        }
+        else if (m_isDrawing && m_currentDrawingMode == DrawingMode::CURVE_HERMITE && m_currentPoints.size() >= 4) {
+            // Finish Hermite Curve (needs at least 4 points: 2 control points + 2 tangent points)
             Shape shape;
             shape.mode = m_currentDrawingMode;
             shape.color = m_currentColor;
@@ -924,9 +954,29 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             m_currentPoints.push_back(newPoint);
             InvalidateRect(m_hwnd, NULL, TRUE);
         }
+            break;        case DrawingMode::CURVE_CARDINAL:
+        {
+            if (!m_isDrawing) {
+                m_currentPoints.clear();
+                m_isDrawing = true;
+            }
+            m_currentPoints.push_back(newPoint);
+            InvalidateRect(m_hwnd, NULL, TRUE);
+        }
             break;
 
-        case DrawingMode::CURVE_CARDINAL:
+        case DrawingMode::CURVE_BEZIER:
+        {
+            if (!m_isDrawing) {
+                m_currentPoints.clear();
+                m_isDrawing = true;
+            }
+            m_currentPoints.push_back(newPoint);
+            InvalidateRect(m_hwnd, NULL, TRUE);
+        }
+            break;
+
+        case DrawingMode::CURVE_HERMITE:
         {
             if (!m_isDrawing) {
                 m_currentPoints.clear();
@@ -1023,10 +1073,16 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
             SetDrawingMode(DrawingMode::SQUARE);
             break;        case MENU_SHAPES_RECTANGLE:
             SetDrawingMode(DrawingMode::RECTANGLE);
+            break;        case MENU_SHAPES_CARDINAL_SPLINE:
+            SetDrawingMode(DrawingMode::CURVE_CARDINAL);
             break;
 
-        case MENU_SHAPES_CARDINAL_SPLINE:
-            SetDrawingMode(DrawingMode::CURVE_CARDINAL);
+        case MENU_SHAPES_BEZIER_CURVE:
+            SetDrawingMode(DrawingMode::CURVE_BEZIER);
+            break;
+
+        case MENU_SHAPES_HERMITE_CURVE:
+            SetDrawingMode(DrawingMode::CURVE_HERMITE);
             break;
 
         case MENU_COLORS_BLACK:
@@ -1470,9 +1526,7 @@ void GraphicsWindow::RedrawAll() {
                     SelectObject(hdc, oldPen);
                     DeleteObject(tempPen);
                 }
-                break;
-
-            case DrawingMode::CURVE_CARDINAL:
+                break;            case DrawingMode::CURVE_CARDINAL:
                 // Draw current Cardinal Spline preview
                 if (m_currentPoints.size() >= 2) {
                     // Convert Point to HermitePoint for preview
@@ -1498,6 +1552,124 @@ void GraphicsWindow::RedrawAll() {
                         LineTo(hdc, point.x + 3, point.y);
                         MoveToEx(hdc, point.x, point.y - 3, NULL);
                         LineTo(hdc, point.x, point.y + 3);
+                    }
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+
+                // Draw preview line to mouse cursor
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    MoveToEx(hdc, m_currentPoints.back().x, m_currentPoints.back().y, NULL);
+                    LineTo(hdc, m_lastMousePos.x, m_lastMousePos.y);
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+                break;
+
+            case DrawingMode::CURVE_BEZIER:
+                // Draw current Bezier Curve preview
+                if (m_currentPoints.size() >= 2) {
+                    // Convert Point to BezierPoint for preview
+                    BezierPoint* bezierPoints = new BezierPoint[m_currentPoints.size()];
+                    for (size_t i = 0; i < m_currentPoints.size(); i++) {
+                        bezierPoints[i] = BezierPoint(m_currentPoints[i].x, m_currentPoints[i].y);
+                    }
+                    
+                    // Calculate adaptive step count based on curve length
+                    double totalDistance = 0;
+                    for (size_t i = 0; i < m_currentPoints.size() - 1; i++) {
+                        double dx = m_currentPoints[i + 1].x - m_currentPoints[i].x;
+                        double dy = m_currentPoints[i + 1].y - m_currentPoints[i].y;
+                        totalDistance += sqrt(dx * dx + dy * dy);
+                    }
+                    int steps = std::max(50, std::min(1000, (int)(totalDistance * 1.5) + 20));
+                    
+                    // Draw Bezier Curve preview
+                    DrawBezierCurve(hdc, bezierPoints, m_currentPoints.size(), steps, m_currentColor);
+                    
+                    delete[] bezierPoints;
+                }
+
+                // Draw points as visual indicators
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_SOLID, 2, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    for (const auto& point : m_currentPoints) {
+                        // Draw small circle at each control point
+                        MoveToEx(hdc, point.x - 3, point.y, NULL);
+                        LineTo(hdc, point.x + 3, point.y);
+                        MoveToEx(hdc, point.x, point.y - 3, NULL);
+                        LineTo(hdc, point.x, point.y + 3);
+                    }
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+
+                // Draw preview line to mouse cursor
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    MoveToEx(hdc, m_currentPoints.back().x, m_currentPoints.back().y, NULL);
+                    LineTo(hdc, m_lastMousePos.x, m_lastMousePos.y);
+
+                    SelectObject(hdc, oldPen);
+                    DeleteObject(tempPen);
+                }
+                break;
+
+            case DrawingMode::CURVE_HERMITE:
+                // Draw current Hermite Curve preview
+                if (m_currentPoints.size() >= 4) {
+                    // For Hermite curves, we need pairs of points: (P0, T0, P1, T1)
+                    // Draw curves for complete point pairs
+                    for (size_t i = 0; i + 3 < m_currentPoints.size(); i += 4) {
+                        HermitePoint P0(m_currentPoints[i].x, m_currentPoints[i].y);
+                        HermitePoint T0(m_currentPoints[i + 1].x - m_currentPoints[i].x, 
+                                      m_currentPoints[i + 1].y - m_currentPoints[i].y);
+                        HermitePoint P1(m_currentPoints[i + 2].x, m_currentPoints[i + 2].y);
+                        HermitePoint T1(m_currentPoints[i + 3].x - m_currentPoints[i + 2].x, 
+                                      m_currentPoints[i + 3].y - m_currentPoints[i + 2].y);
+                        
+                        // Calculate adaptive point count
+                        double dx = P1.x - P0.x;
+                        double dy = P1.y - P0.y;
+                        double distance = sqrt(dx * dx + dy * dy);
+                        int points = std::max(50, std::min(1000, (int)(distance * 2) + 10));
+                        
+                        DrawHermiteCurve(hdc, P0, T0, P1, T1, points, m_currentColor);
+                    }
+                }
+
+                // Draw points as visual indicators
+                if (!m_currentPoints.empty()) {
+                    HPEN tempPen = CreatePen(PS_SOLID, 2, m_currentColor);
+                    HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
+
+                    for (size_t i = 0; i < m_currentPoints.size(); i++) {
+                        const auto& point = m_currentPoints[i];
+                        // Draw different markers for control points vs tangent points
+                        if (i % 4 == 0 || i % 4 == 2) {
+                            // Control points - draw circles
+                            MoveToEx(hdc, point.x - 3, point.y, NULL);
+                            LineTo(hdc, point.x + 3, point.y);
+                            MoveToEx(hdc, point.x, point.y - 3, NULL);
+                            LineTo(hdc, point.x, point.y + 3);
+                        } else {
+                            // Tangent points - draw squares
+                            MoveToEx(hdc, point.x - 2, point.y - 2, NULL);
+                            LineTo(hdc, point.x + 2, point.y - 2);
+                            LineTo(hdc, point.x + 2, point.y + 2);
+                            LineTo(hdc, point.x - 2, point.y + 2);
+                            LineTo(hdc, point.x - 2, point.y - 2);
+                        }
                     }
 
                     SelectObject(hdc, oldPen);
@@ -1954,9 +2126,7 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
                 }
             }
         }
-            break;
-
-        case DrawingMode::CURVE_CARDINAL:
+            break;        case DrawingMode::CURVE_CARDINAL:
         {
             if (shape.points.size() >= 2) {
                 // Convert Point to HermitePoint
@@ -1969,6 +2139,56 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
                 DrawCardinalSpline(m_offscreenDC, hermitePoints, shape.points.size(), 0.5, 50, shape.color);
                 
                 delete[] hermitePoints;
+            }
+        }
+            break;
+
+        case DrawingMode::CURVE_BEZIER:
+        {
+            if (shape.points.size() >= 2) {
+                // Convert Point to BezierPoint
+                BezierPoint* bezierPoints = new BezierPoint[shape.points.size()];
+                for (size_t i = 0; i < shape.points.size(); i++) {
+                    bezierPoints[i] = BezierPoint(shape.points[i].x, shape.points[i].y);
+                }
+                
+                // Calculate adaptive step count based on curve length
+                double totalDistance = 0;
+                for (size_t i = 0; i < shape.points.size() - 1; i++) {
+                    double dx = shape.points[i + 1].x - shape.points[i].x;
+                    double dy = shape.points[i + 1].y - shape.points[i].y;
+                    totalDistance += sqrt(dx * dx + dy * dy);
+                }
+                int steps = std::max(50, std::min(1000, (int)(totalDistance * 1.5) + 20));
+                
+                // Draw Bezier Curve
+                DrawBezierCurve(m_offscreenDC, bezierPoints, shape.points.size(), steps, shape.color);
+                
+                delete[] bezierPoints;
+            }
+        }
+            break;
+
+        case DrawingMode::CURVE_HERMITE:
+        {
+            if (shape.points.size() >= 4) {
+                // For Hermite curves, draw curves for complete point quadruples: (P0, T0, P1, T1)
+                for (size_t i = 0; i + 3 < shape.points.size(); i += 4) {
+                    HermitePoint P0(shape.points[i].x, shape.points[i].y);
+                    HermitePoint T0(shape.points[i + 1].x - shape.points[i].x, 
+                                  shape.points[i + 1].y - shape.points[i].y);
+                    HermitePoint P1(shape.points[i + 2].x, shape.points[i + 2].y);
+                    HermitePoint T1(shape.points[i + 3].x - shape.points[i + 2].x, 
+                                  shape.points[i + 3].y - shape.points[i + 2].y);
+                    
+                    // Calculate adaptive point count
+                    double dx = P1.x - P0.x;
+                    double dy = P1.y - P0.y;
+                    double distance = sqrt(dx * dx + dy * dy);
+                    int points = std::max(50, std::min(1000, (int)(distance * 2) + 10));
+                    
+                    DrawHermiteCurve(m_offscreenDC, P0, T0, P1, T1, points, shape.color);
+                }
             }
         }
             break;
