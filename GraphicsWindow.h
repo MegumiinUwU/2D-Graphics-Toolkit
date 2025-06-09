@@ -6,6 +6,7 @@
 #include <string>
 #include <memory>
 #include <cmath>
+#include <fstream>
 #include "LineAlgorithms.h"
 #include "CircleAlgorithms.h"
 #include "EllipseAlgorithms.h"
@@ -15,6 +16,8 @@
 #include "RectangleAlgorithms.h"
 #include "HermiteAlgorithms.h"
 #include "BezierAlgorithms.h"
+
+#include<iostream>
 
 
 // ========================================
@@ -211,8 +214,8 @@ private:
     void HandleMenuCommand(WPARAM wParam);
     void RedrawAll();
     void ClearCanvas();
-    void SaveToFile(const std::string& filename);
-    void LoadFromFile(const std::string& filename);
+    void SaveToFile();
+    void LoadFromFile();
 
 public:
     // Constructor and destructor
@@ -291,7 +294,9 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     if (!RegisterClass(&wc)) {
         return false;
-    }    // Create window
+    }
+    
+    // Create window
     m_hwnd = CreateWindow(
             s_className,
             "2D Graphics Drawing Program",
@@ -303,7 +308,9 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
 
     if (!m_hwnd) {
         return false;
-    }    // Initialize menus and drawing tools
+    }
+    
+    // Initialize menus and drawing tools
     InitializeMenus();
     InitializeDrawingTools();
 
@@ -320,7 +327,6 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     SetForegroundWindow(m_hwnd);
     SetActiveWindow(m_hwnd);
     SetFocus(m_hwnd);
-
     return true;
 }
 
@@ -597,7 +603,8 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 }
 
 // Handle mouse click
-void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {    if (!isLeftButton) {
+void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
+    if (!isLeftButton) {
         // Right click - finish current drawing or cancel
         if (m_isDrawing && m_currentDrawingMode == DrawingMode::POLYGON && m_currentPoints.size() >= 3) {
             // Finish polygon
@@ -1100,11 +1107,20 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
         case MENU_FILL_RECTANGLE_BEZIER:
             SetFillMode(FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL);
             break;
+
+        case MENU_FILE_SAVE:
+            SaveToFile();
+            break;
+        
+        case MENU_FILE_LOAD:
+            LoadFromFile();
+            break;
     }
 }
 
 // Redraw all shapes using implemented algorithms
 void GraphicsWindow::RedrawAll() {
+    // std::cout << m_shapes.size();
     HDC hdc = GetDC(m_hwnd);
 
     // Draw all saved shapes using their respective algorithms
@@ -1189,6 +1205,7 @@ void GraphicsWindow::RedrawAll() {
                         pow(shape.points[1].x - shape.points[0].x, 2) +
                         pow(shape.points[1].y - shape.points[0].y, 2)
                     );
+                    std::cout << radius << '\n';
                     DrawCircleBresenham(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
                     
                     // Apply fill mode if set
@@ -1605,13 +1622,102 @@ void GraphicsWindow::SetLineThickness(int thickness) {
 }
 
 // Save to file (placeholder)
-void GraphicsWindow::SaveToFile(const std::string& filename) {
-    // TODO: Implement file saving
+void GraphicsWindow::SaveToFile() {
+    OPENFILENAME ofn;              
+    char szFile[MAX_PATH] = "";   
+
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = m_hwnd;  
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+
+
+    ofn.lpstrFilter = "binary Files (*.bin)\0*.bin\0All Files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrDefExt = "bin";
+    ofn.lpstrTitle = "Save Drawing As";
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_OVERWRITEPROMPT;
+
+    if (GetSaveFileName(&ofn)) {
+        std::ofstream outFile(szFile, std::ios::binary);
+        if (!outFile) {
+            MessageBox(m_hwnd, "Failed to open file for writing.", "Error", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        int shapeCnt = m_shapes.size();
+        outFile.write(reinterpret_cast<const char*>(&shapeCnt), sizeof(shapeCnt));
+
+        for(auto& shape:m_shapes) {
+            outFile.write(reinterpret_cast<const char*>(&shape.mode), sizeof(shape.mode));
+            outFile.write(reinterpret_cast<const char*>(&shape.color), sizeof(shape.color));
+            outFile.write(reinterpret_cast<const char*>(&shape.fillMode), sizeof(shape.fillMode));
+            outFile.write(reinterpret_cast<const char*>(&shape.thickness), sizeof(shape.thickness));
+
+            int pointCnt = shape.points.size();
+            outFile.write(reinterpret_cast<const char*>(&pointCnt), sizeof(pointCnt));
+
+            if (pointCnt > 0) {
+                outFile.write(reinterpret_cast<const char*>(shape.points.data()), pointCnt * sizeof(Point));
+            }
+        }
+        
+        outFile.close();
+    }
 }
 
-// Load from file (placeholder)
-void GraphicsWindow::LoadFromFile(const std::string& filename) {
-    // TODO: Implement file loading
+
+void GraphicsWindow::LoadFromFile() {
+    OPENFILENAME ofn;
+    char szFile[MAX_PATH] = "";
+
+    ZeroMemory(&ofn, sizeof(ofn));
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = m_hwnd;
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+
+    ofn.lpstrFilter = "Binary Files (*.bin)\0*.bin\0All Files (*.*)\0*.*\0";
+    ofn.nFilterIndex = 1;
+    ofn.lpstrDefExt = "bin";
+    ofn.lpstrTitle = "Open Drawing";
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST;
+
+    if (GetOpenFileName(&ofn)) {
+        std::ifstream inFile(szFile, std::ios::binary);
+        if (!inFile) {
+            MessageBox(m_hwnd, "Failed to open file for reading.", "Error", MB_OK | MB_ICONERROR);
+            return;
+        }
+
+        ClearCanvas();
+
+        int shapeCnt = 0;
+        inFile.read(reinterpret_cast<char*>(&shapeCnt), sizeof(shapeCnt));
+        for (int i = 0; i < shapeCnt; ++i) {
+            Shape shape;
+
+            inFile.read(reinterpret_cast<char*>(&shape.mode), sizeof(shape.mode));
+            inFile.read(reinterpret_cast<char*>(&shape.color), sizeof(shape.color));
+            inFile.read(reinterpret_cast<char*>(&shape.fillMode), sizeof(shape.fillMode));
+            inFile.read(reinterpret_cast<char*>(&shape.thickness), sizeof(shape.thickness));
+
+            int pointCnt = 0;
+            inFile.read(reinterpret_cast<char*>(&pointCnt), sizeof(pointCnt));
+
+            shape.points.resize(pointCnt);
+            if (pointCnt > 0) {
+                inFile.read(reinterpret_cast<char*>(shape.points.data()), pointCnt * sizeof(Point));
+            }
+            m_shapes.push_back(shape);
+        }
+        inFile.close();
+        InvalidateRect(m_hwnd, nullptr, TRUE);
+        RedrawAll();
+        RebuildOffscreenBuffer();
+        InvalidateRect(m_hwnd, NULL, TRUE);
+    }
 }
 
 // Create offscreen buffer for double buffering
@@ -1917,72 +2023,6 @@ int RunGraphicsProgram(GraphicsWindow* window) {
     window->Run();
     delete window;
     return 0;
-}
-
-// ========================================
-// DRAWING ALGORITHMS IMPLEMENTATION
-// ========================================
-
-class DrawingAlgorithms {
-public:
-    // Line drawing algorithms
-    static void DrawLineDDA(HDC hdc, int x1, int y1, int x2, int y2, COLORREF color);
-    static void DrawLineMidpoint(HDC hdc, int x1, int y1, int x2, int y2, COLORREF color);
-    static void DrawLineParametric(HDC hdc, int x1, int y1, int x2, int y2, COLORREF color);
-
-    // Circle drawing algorithms
-    static void DrawCircleDirect(HDC hdc, int centerX, int centerY, int radius, COLORREF color);
-    static void DrawCirclePolar(HDC hdc, int centerX, int centerY, int radius, COLORREF color);
-    static void DrawCircleIterativePolar(HDC hdc, int centerX, int centerY, int radius, COLORREF color);
-    static void DrawCircleMidpoint(HDC hdc, int centerX, int centerY, int radius, COLORREF color);
-    static void DrawCircleModifiedMidpoint(HDC hdc, int centerX, int centerY, int radius, COLORREF color);
-
-    // Ellipse drawing algorithms
-    static void DrawEllipseDirect(HDC hdc, int centerX, int centerY, int radiusX, int radiusY, COLORREF color);
-    static void DrawEllipsePolar(HDC hdc, int centerX, int centerY, int radiusX, int radiusY, COLORREF color);
-    static void DrawEllipseMidpoint(HDC hdc, int centerX, int centerY, int radiusX, int radiusY, COLORREF color);
-
-    // Curve algorithms
-    static void DrawCardinalSpline(HDC hdc, const std::vector<Point>& controlPoints, COLORREF color, float tension = 0.5f);
-
-    // Filling algorithms
-    static void FloodFillRecursive(HDC hdc, int x, int y, COLORREF fillColor, COLORREF boundaryColor);
-    static void FloodFillNonRecursive(HDC hdc, int x, int y, COLORREF fillColor, COLORREF boundaryColor);
-    static void ScanLineFillConvex(HDC hdc, const std::vector<Point>& vertices, COLORREF fillColor);
-    static void ScanLineFillNonConvex(HDC hdc, const std::vector<Point>& vertices, COLORREF fillColor);
-
-    // Helper functions
-    static void SetPixel(HDC hdc, int x, int y, COLORREF color);
-    static COLORREF GetPixel(HDC hdc, int x, int y);
-    static void DrawCirclePoints(HDC hdc, int centerX, int centerY, int x, int y, COLORREF color);
-    static void DrawEllipsePoints(HDC hdc, int centerX, int centerY, int x, int y, COLORREF color);
-};
-
-// ========================================
-// UTILITY FUNCTIONS
-// ========================================
-
-namespace GraphicsUtils {
-    // Color utilities
-    COLORREF RGBToColorRef(int r, int g, int b);
-    void ColorRefToRGB(COLORREF color, int& r, int& g, int& b);
-
-    // File dialog helpers
-    std::string OpenFileDialog(HWND hwnd);
-    std::string SaveFileDialog(HWND hwnd);
-
-    // Math utilities
-    double Distance(const Point& p1, const Point& p2);
-    Point MidPoint(const Point& p1, const Point& p2);
-
-    // Clipping algorithms
-    bool ClipPointToRectangle(const Point& point, const RECT& clipRect);
-    bool ClipLineToRectangle(Point& p1, Point& p2, const RECT& clipRect);
-    std::vector<Point> ClipPolygonToRectangle(const std::vector<Point>& polygon, const RECT& clipRect);
-
-    // Circle clipping
-    bool ClipPointToCircle(const Point& point, const Point& center, int radius);
-    bool ClipLineToCircle(Point& p1, Point& p2, const Point& center, int radius);
 }
 
 #endif // GRAPHICS_WINDOW_H
