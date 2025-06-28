@@ -16,6 +16,7 @@
 #include "RectangleAlgorithms.h"
 #include "HermiteAlgorithms.h"
 #include "BezierAlgorithms.h"
+#include "ClippingAlgorithms.h"
 
 #include<iostream>
 
@@ -46,7 +47,7 @@
 #define MENU_SHAPES_CIRCLE_MODIFIED  2025
 #define MENU_SHAPES_CIRCLE_FILL      2005
 #define MENU_SHAPES_CIRCLE_FILL_LINES     2051
-#define MENU_SHAPES_CIRCLE_FILL_QUARTER   2052  
+#define MENU_SHAPES_CIRCLE_FILL_QUARTER   2052
 #define MENU_SHAPES_CIRCLE_FILL_CIRCLES   2053
 #define MENU_SHAPES_ELLIPSE   2003
 #define MENU_SHAPES_ELLIPSE_DIRECT   2031
@@ -68,7 +69,7 @@
 #define MENU_FILL_SOLID       4002
 #define MENU_FILL_PATTERN     4003
 #define MENU_FILL_CIRCLE_LINES     4051
-#define MENU_FILL_CIRCLE_QUARTER   4052  
+#define MENU_FILL_CIRCLE_QUARTER   4052
 #define MENU_FILL_CIRCLE_CIRCLES   4053
 #define MENU_FILL_POLYGON_CONVEX   4054
 #define MENU_FILL_POLYGON_NONCONVEX 4055
@@ -85,6 +86,13 @@
 #define MENU_CURSOR_HAND      6002
 #define MENU_CURSOR_CROSSHAIR 6003
 
+#define MENU_CLIP_POINT_RECTANGLE 7001
+#define MENU_CLIP_LINE_RECTANGLE 7002
+#define MENU_CLIP_POLYGON_RECTANGLE 7003
+#define MENU_CLIP_POINT_SQUARE 7004
+#define MENU_CLIP_LINE_SQUARE 7005
+#define MENU_CLIP_POINT_CIRCLE 7006
+#define MENU_CLIP_LINE_CIRCLE 7007
 
 using namespace std;
 
@@ -103,6 +111,14 @@ enum class DrawingMode {
     SQUARE,
     RECTANGLE,
     CURVE_CARDINAL,
+    // Clipping modes
+    POINT_CLIP_RECT,
+    LINE_CLIP_RECT,
+    POLYGON_CLIP_RECT,
+    POINT_CLIP_SQUARE,
+    LINE_CLIP_SQUARE,
+    POINT_CLIP_CIRCLE,
+    LINE_CLIP_CIRCLE,
     NONE
 };
 
@@ -122,6 +138,15 @@ enum class FillMode {
     FLOOD_FILL_NONRECURSIVE_POLYGON,
     SQUARE_FILL_HERMITE_VERTICAL,
     RECTANGLE_FILL_BEZIER_HORIZONTAL
+};
+
+// Clipping step
+enum class ClippingStep {
+    None,
+    DrawWindow,
+    DrawShape,
+    ReadyToClip,
+    ShowResult
 };
 
 // Point structure for coordinates
@@ -170,10 +195,10 @@ private:
     bool m_isDrawing;
     std::vector<Point> m_currentPoints;
     Point m_lastMousePos;
-    
+
     // Rectangle dragging state
     bool m_isDraggingRectangle;
-    
+
     // Polygon drawing state
     std::vector<PolygonPoint> m_polygonPoints;
     bool m_isDrawingPolygon;
@@ -216,6 +241,16 @@ private:
     void ClearCanvas();
     void SaveToFile();
     void LoadFromFile();
+
+    // New for improved clipping workflow
+    ClippingStep m_clippingStep = ClippingStep::None;
+    std::vector<Point> m_clippingWindowPoints; // For window (2 points)
+    std::vector<Point> m_clippingShapePoints;  // For shape (2 for line, 1 for point, N for polygon)
+    std::vector<Point> m_clippedResultPoints;  // For result (2 for line, 1 for point, N for polygon)
+    DrawingMode m_lastClippingMode = DrawingMode::NONE;
+
+    // Add helper for resetting clipping state
+    void ResetClippingState();
 
 public:
     // Constructor and destructor
@@ -295,7 +330,7 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     if (!RegisterClass(&wc)) {
         return false;
     }
-    
+
     // Create window
     m_hwnd = CreateWindow(
             s_className,
@@ -309,7 +344,7 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     if (!m_hwnd) {
         return false;
     }
-    
+
     // Initialize menus and drawing tools
     InitializeMenus();
     InitializeDrawingTools();
@@ -320,10 +355,10 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     // Show window with proper visibility and focus
     ShowWindow(m_hwnd, nCmdShow);
     UpdateWindow(m_hwnd);
-    
+
     // Ensure window stays visible and gets focus
-    SetWindowPos(m_hwnd, HWND_TOP, 0, 0, 0, 0, 
-                SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetWindowPos(m_hwnd, HWND_TOP, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     SetForegroundWindow(m_hwnd);
     SetActiveWindow(m_hwnd);
     SetFocus(m_hwnd);
@@ -345,14 +380,14 @@ void GraphicsWindow::InitializeMenus() {
 
     // Shapes menu
     HMENU hShapesMenu = CreatePopupMenu();
-    
+
     // Line submenu
     HMENU hLineMenu = CreatePopupMenu();
     AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_DDA, "DDA Algorithm");
     AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_BRESENHAM, "Bresenham (Midpoint)");
     AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_PARAMETRIC, "Parametric");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hLineMenu, "Line");
-    
+
     // Circle submenu
     HMENU hCircleMenu = CreatePopupMenu();
     AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_DIRECT, "Direct Algorithm");
@@ -361,7 +396,7 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_MIDPOINT, "Midpoint (Bresenham)");
     AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_MODIFIED, "Modified Midpoint");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCircleMenu, "Circle");
-    
+
     // Ellipse submenu
     HMENU hEllipseMenu = CreatePopupMenu();
     AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_DIRECT, "Direct Algorithm");
@@ -371,7 +406,7 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_SQUARE, "Square");
     AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_RECTANGLE, "Rectangle");
     AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hPolygonMenu, "Polygon");
-    
+
     // Curve submenu
     HMENU hCurveMenu = CreatePopupMenu();
     AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_CARDINAL_SPLINE, "Cardinal Spline");
@@ -417,6 +452,19 @@ void GraphicsWindow::InitializeMenus() {
     AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_HAND, "Hand");
     AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_CROSSHAIR, "Crosshair");
     AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hCursorMenu, "Cursor");
+
+    // Clipping menu
+    HMENU hClippingMenu = CreatePopupMenu();
+    AppendMenu(hClippingMenu, MF_STRING, MENU_CLIP_POINT_RECTANGLE, "Point Clipping (Rectangle)");
+    AppendMenu(hClippingMenu, MF_STRING, MENU_CLIP_LINE_RECTANGLE, "Line Clipping (Rectangle)");
+    AppendMenu(hClippingMenu, MF_STRING, MENU_CLIP_POLYGON_RECTANGLE, "Polygon Clipping (Rectangle)");
+    AppendMenu(hClippingMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hClippingMenu, MF_STRING, MENU_CLIP_POINT_SQUARE, "Point Clipping (Square)");
+    AppendMenu(hClippingMenu, MF_STRING, MENU_CLIP_LINE_SQUARE, "Line Clipping (Square)");
+    AppendMenu(hClippingMenu, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hClippingMenu, MF_STRING, MENU_CLIP_POINT_CIRCLE, "Point Clipping (Circle)");
+    AppendMenu(hClippingMenu, MF_STRING, MENU_CLIP_LINE_CIRCLE, "Line Clipping (Circle)");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hClippingMenu, "Clipping");
 
     SetMenu(m_hwnd, m_hMenuBar);
 }
@@ -501,21 +549,123 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             PAINTSTRUCT ps;
             HDC hdc = BeginPaint(hwnd, &ps);
 
+            // Debug: Always print current mode and window points count to console
+            std::cout << "WM_PAINT: Mode=" << (int)m_lastClippingMode << ", Points=" << m_clippingWindowPoints.size() << std::endl;
+
             // Copy from offscreen buffer for much better performance
             if (m_offscreenDC) {
                 BitBlt(hdc, 0, 0, m_canvasWidth, m_canvasHeight, m_offscreenDC, 0, 0, SRCCOPY);
             }
 
+            // Draw clipping window if in any clipping mode
+            if (m_lastClippingMode != DrawingMode::NONE && m_clippingWindowPoints.size() == 2) {
+                std::cout << "Drawing Clipping Window" << std::endl;
+                std::cout << "P1: (" << m_clippingWindowPoints[0].x << "," << m_clippingWindowPoints[0].y 
+                          << ")  P2: (" << m_clippingWindowPoints[1].x << "," << m_clippingWindowPoints[1].y << ")" << std::endl;
+                HPEN redDashed = CreatePen(PS_DASH, 2, RGB(255,0,0));
+                HPEN oldPen = (HPEN)SelectObject(hdc, redDashed);
+                if (m_lastClippingMode == DrawingMode::LINE_CLIP_RECT || m_lastClippingMode == DrawingMode::POINT_CLIP_RECT || m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT) {
+                    int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                    int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                    int xLeft = std::min(cx, vx), xRight = std::max(cx, vx);
+                    int yTop = std::min(cy, vy), yBottom = std::max(cy, vy);
+                    MoveToEx(hdc, xLeft, yTop, NULL);
+                    LineTo(hdc, xRight, yTop);
+                    LineTo(hdc, xRight, yBottom);
+                    LineTo(hdc, xLeft, yBottom);
+                    LineTo(hdc, xLeft, yTop);
+                } else if (m_lastClippingMode == DrawingMode::LINE_CLIP_SQUARE || m_lastClippingMode == DrawingMode::POINT_CLIP_SQUARE) {
+                    int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                    int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                    int size = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    int left = cx-size, right = cx+size, top = cy-size, bottom = cy+size;
+                    MoveToEx(hdc, left, top, NULL);
+                    LineTo(hdc, right, top);
+                    LineTo(hdc, right, bottom);
+                    LineTo(hdc, left, bottom);
+                    LineTo(hdc, left, top);
+                } else if (m_lastClippingMode == DrawingMode::LINE_CLIP_CIRCLE || m_lastClippingMode == DrawingMode::POINT_CLIP_CIRCLE) {
+                    int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                    int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                    int r = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    Arc(hdc, cx-r, cy-r, cx+r, cy+r, cx+r, cy, cx+r, cy);
+                }
+                SelectObject(hdc, oldPen);
+                DeleteObject(redDashed);
+            }
+
+            // Draw shape to be clipped as blue preview
+            if ((m_clippingStep == ClippingStep::DrawShape || m_clippingStep == ClippingStep::ReadyToClip) && !m_clippingShapePoints.empty()) {
+                std::cout << "Drawing shape preview with " << m_clippingShapePoints.size() << " points" << std::endl;
+                HPEN blueDashed = CreatePen(PS_DASH, 1, RGB(0,0,255));
+                HPEN oldPen = (HPEN)SelectObject(hdc, blueDashed);
+                if (m_lastClippingMode == DrawingMode::LINE_CLIP_RECT || m_lastClippingMode == DrawingMode::LINE_CLIP_SQUARE || m_lastClippingMode == DrawingMode::LINE_CLIP_CIRCLE) {
+                    if (m_clippingShapePoints.size() == 2) {
+                        MoveToEx(hdc, m_clippingShapePoints[0].x, m_clippingShapePoints[0].y, NULL);
+                        LineTo(hdc, m_clippingShapePoints[1].x, m_clippingShapePoints[1].y);
+                    }
+                } else if (m_lastClippingMode == DrawingMode::POINT_CLIP_RECT || m_lastClippingMode == DrawingMode::POINT_CLIP_SQUARE || m_lastClippingMode == DrawingMode::POINT_CLIP_CIRCLE) {
+                    if (m_clippingShapePoints.size() == 1) {
+                        SetPixel(hdc, m_clippingShapePoints[0].x, m_clippingShapePoints[0].y, RGB(0,0,255));
+                    }
+                } else if (m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT) {
+                    if (m_clippingShapePoints.size() >= 2) {
+                        for (size_t i = 0; i < m_clippingShapePoints.size()-1; ++i) {
+                            MoveToEx(hdc, m_clippingShapePoints[i].x, m_clippingShapePoints[i].y, NULL);
+                            LineTo(hdc, m_clippingShapePoints[i+1].x, m_clippingShapePoints[i+1].y);
+                        }
+                        // If we're ready to clip, close the polygon
+                        if (m_clippingStep == ClippingStep::ReadyToClip && m_clippingShapePoints.size() >= 3) {
+                            MoveToEx(hdc, m_clippingShapePoints.back().x, m_clippingShapePoints.back().y, NULL);
+                            LineTo(hdc, m_clippingShapePoints[0].x, m_clippingShapePoints[0].y);
+                        }
+                    }
+                }
+                SelectObject(hdc, oldPen);
+                DeleteObject(blueDashed);
+            }
+
+            // Draw clipped result
+            if (m_clippingStep == ClippingStep::ShowResult && !m_clippedResultPoints.empty()) {
+                std::cout << "Drawing clipped result with " << m_clippedResultPoints.size() << " points" << std::endl;
+                HPEN greenPen = CreatePen(PS_SOLID, 2, RGB(0,200,0));
+                HPEN oldPen = (HPEN)SelectObject(hdc, greenPen);
+                if (m_lastClippingMode == DrawingMode::LINE_CLIP_RECT || m_lastClippingMode == DrawingMode::LINE_CLIP_SQUARE || m_lastClippingMode == DrawingMode::LINE_CLIP_CIRCLE) {
+                    if (m_clippedResultPoints.size() == 2) {
+                        MoveToEx(hdc, m_clippedResultPoints[0].x, m_clippedResultPoints[0].y, NULL);
+                        LineTo(hdc, m_clippedResultPoints[1].x, m_clippedResultPoints[1].y);
+                    }
+                } else if (m_lastClippingMode == DrawingMode::POINT_CLIP_RECT || m_lastClippingMode == DrawingMode::POINT_CLIP_SQUARE || m_lastClippingMode == DrawingMode::POINT_CLIP_CIRCLE) {
+                    if (m_clippedResultPoints.size() == 1) {
+                        SetPixel(hdc, m_clippedResultPoints[0].x, m_clippedResultPoints[0].y, RGB(0,200,0));
+                    }
+                } else if (m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT) {
+                    if (m_clippedResultPoints.size() >= 2) {
+                        for (size_t i = 0; i < m_clippedResultPoints.size()-1; ++i) {
+                            MoveToEx(hdc, m_clippedResultPoints[i].x, m_clippedResultPoints[i].y, NULL);
+                            LineTo(hdc, m_clippedResultPoints[i+1].x, m_clippedResultPoints[i+1].y);
+                        }
+                        // Close polygon
+                        if (m_clippedResultPoints.size() >= 3) {
+                            MoveToEx(hdc, m_clippedResultPoints.back().x, m_clippedResultPoints.back().y, NULL);
+                            LineTo(hdc, m_clippedResultPoints[0].x, m_clippedResultPoints[0].y);
+                        }
+                    }
+                }
+                SelectObject(hdc, oldPen);
+                DeleteObject(greenPen);
+            }
+
             // Draw instructions on top
             SetTextColor(hdc, RGB(100, 100, 100));
             SetBkMode(hdc, TRANSPARENT);
-            
+
             if (m_fillMode) {
-                if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL || 
+                if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL ||
                     m_currentFillMode == FillMode::POLYGON_NONCONVEX_FILL) {
                     TextOut(hdc, 10, 10, "POLYGON FILL: Click near existing polygon to fill it", 50);
-                } else                if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
-                           m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
+                } else                if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON ||
+                                          m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
                     TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 42);                } else if (m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
                     TextOut(hdc, 10, 10, "SQUARE HERMITE FILL: Click inside a square to fill it | Right click to cancel", 75);
                 } else if (m_currentFillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
@@ -578,12 +728,12 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             GetClientRect(hwnd, &clientRect);
             int newWidth = clientRect.right - clientRect.left;
             int newHeight = clientRect.bottom - clientRect.top;
-            
+
             if (newWidth > 0 && newHeight > 0) {
                 CreateOffscreenBuffer(newWidth, newHeight);
                 RebuildOffscreenBuffer();
             }
-            
+
             InvalidateRect(hwnd, NULL, TRUE);
         }
             break;
@@ -596,6 +746,87 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             PostQuitMessage(0);
             break;
 
+        case WM_KEYDOWN:
+            std::cout << "Key pressed: " << wParam << std::endl;
+            if (wParam == VK_RETURN && m_clippingStep == ClippingStep::ReadyToClip) {
+                std::cout << "Enter pressed - performing clipping" << std::endl;
+                // Perform clipping
+                m_clippedResultPoints.clear();
+                if (m_lastClippingMode == DrawingMode::LINE_CLIP_RECT && m_clippingWindowPoints.size() == 2 && m_clippingShapePoints.size() == 2) {
+                    int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                    int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                    int xLeft = std::min(cx, vx), xRight = std::max(cx, vx);
+                    int yTop = std::min(cy, vy), yBottom = std::max(cy, vy);
+                    int x1 = m_clippingShapePoints[0].x, y1 = m_clippingShapePoints[0].y;
+                    int x2 = m_clippingShapePoints[1].x, y2 = m_clippingShapePoints[1].y;
+                    if (CohenSutherlandLineClip(x1, y1, x2, y2, xLeft, xRight, yTop, yBottom)) {
+                        m_clippedResultPoints.push_back(Point(x1, y1));
+                        m_clippedResultPoints.push_back(Point(x2, y2));
+                    }
+                } else if (m_lastClippingMode == DrawingMode::LINE_CLIP_SQUARE && m_clippingWindowPoints.size() == 2 && m_clippingShapePoints.size() == 2) {
+                    int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                    int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                    int size = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    int x1 = m_clippingShapePoints[0].x, y1 = m_clippingShapePoints[0].y;
+                    int x2 = m_clippingShapePoints[1].x, y2 = m_clippingShapePoints[1].y;
+                    if (SquareLineClip(x1, y1, x2, y2, cx-size, cy-size, 2*size)) {
+                        m_clippedResultPoints.push_back(Point(x1, y1));
+                        m_clippedResultPoints.push_back(Point(x2, y2));
+                    }
+                } else if (m_lastClippingMode == DrawingMode::LINE_CLIP_CIRCLE && m_clippingWindowPoints.size() == 2 && m_clippingShapePoints.size() == 2) {
+                    int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                    int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                    int r = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    int x1 = m_clippingShapePoints[0].x, y1 = m_clippingShapePoints[0].y;
+                    int x2 = m_clippingShapePoints[1].x, y2 = m_clippingShapePoints[1].y;
+                    if (CircleLineClip(x1, y1, x2, y2, cx, cy, r)) {
+                        m_clippedResultPoints.push_back(Point(x1, y1));
+                        m_clippedResultPoints.push_back(Point(x2, y2));
+                    }
+                } else if ((m_lastClippingMode == DrawingMode::POINT_CLIP_RECT || m_lastClippingMode == DrawingMode::POINT_CLIP_SQUARE || m_lastClippingMode == DrawingMode::POINT_CLIP_CIRCLE) && m_clippingWindowPoints.size() == 2 && m_clippingShapePoints.size() == 1) {
+                    int px = m_clippingShapePoints[0].x, py = m_clippingShapePoints[0].y;
+                    bool inside = false;
+                    if (m_lastClippingMode == DrawingMode::POINT_CLIP_RECT) {
+                        int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                        int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                        int xLeft = std::min(cx, vx), xRight = std::max(cx, vx);
+                        int yTop = std::min(cy, vy), yBottom = std::max(cy, vy);
+                        inside = ClipPointRectangle(px, py, xLeft, xRight, yTop, yBottom);
+                    } else if (m_lastClippingMode == DrawingMode::POINT_CLIP_SQUARE) {
+                        int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                        int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                        int size = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                        inside = ClipPointSquare(px, py, cx-size, 2*size);
+                    } else if (m_lastClippingMode == DrawingMode::POINT_CLIP_CIRCLE) {
+                        int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                        int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                        int r = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                        inside = ClipPointCircle(px, py, cx, cy, r);
+                    }
+                    if (inside) {
+                        m_clippedResultPoints.push_back(Point(px, py));
+                    }
+                } else if (m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT && m_clippingWindowPoints.size() == 2 && m_clippingShapePoints.size() >= 3) {
+                    int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+                    int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+                    int xLeft = std::min(cx, vx), xRight = std::max(cx, vx);
+                    int yTop = std::min(cy, vy), yBottom = std::max(cy, vy);
+                    std::vector<Point2> poly;
+                    for (const auto& p : m_clippingShapePoints) poly.push_back(Point2(p.x, p.y));
+                    auto clipped = SutherlandHodgmanPolygonClip(poly, xLeft, xRight, yTop, yBottom);
+                    for (const auto& p : clipped) m_clippedResultPoints.push_back(Point((int)p.x, (int)p.y));
+                }
+                m_clippingStep = ClippingStep::ShowResult;
+                InvalidateRect(m_hwnd, NULL, TRUE);
+                return 0;
+            } else if (wParam == VK_RETURN && m_clippingStep == ClippingStep::DrawShape && m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT && m_clippingShapePoints.size() >= 3) {
+                std::cout << "Enter pressed - finishing polygon with " << m_clippingShapePoints.size() << " points" << std::endl;
+                m_clippingStep = ClippingStep::ReadyToClip;
+                InvalidateRect(m_hwnd, NULL, TRUE);
+                return 0;
+            }
+            break;
+
         default:
             return DefWindowProc(hwnd, message, wParam, lParam);
     }
@@ -605,6 +836,12 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 // Handle mouse click
 void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
     if (!isLeftButton) {
+        // Right click cancels current clipping operation
+        if (m_clippingStep != ClippingStep::None) {
+            ResetClippingState();
+            InvalidateRect(m_hwnd, NULL, TRUE);
+            return;
+        }
         // Right click - finish current drawing or cancel
         if (m_isDrawing && m_currentDrawingMode == DrawingMode::POLYGON && m_currentPoints.size() >= 3) {
             // Finish polygon
@@ -642,12 +879,12 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
 
     // Left click - check if we're in fill mode first
     Point newPoint(x, y);
-    
+
     // If we're in fill mode, try to fill an existing circle
     if (m_fillMode) {
-        if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL || 
+        if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL ||
             m_currentFillMode == FillMode::POLYGON_NONCONVEX_FILL) {
-            
+
             // Fill existing polygons by clicking on them
             for (auto& shape : m_shapes) {
                 if (shape.mode == DrawingMode::POLYGON && shape.points.size() >= 3) {
@@ -659,7 +896,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                             break;
                         }
                     }
-                    
+
                     if (inside) {
                         shape.fillMode = m_currentFillMode;
                         RebuildOffscreenBuffer();
@@ -670,8 +907,8 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             }
             return;
         }
-        
-        if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
+
+        if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON ||
             m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
             COLORREF originalColor = GetPixel(m_offscreenDC, x, y);
             if (originalColor != m_currentColor) {
@@ -684,7 +921,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             }
             return;
         }
-          for (auto& shape : m_shapes) {
+        for (auto& shape : m_shapes) {
             // Check if it's a circle shape and if click is inside it
             if ((shape.mode == DrawingMode::CIRCLE_DIRECT ||
                  shape.mode == DrawingMode::CIRCLE_POLAR ||
@@ -692,78 +929,78 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                  shape.mode == DrawingMode::CIRCLE_MIDPOINT ||
                  shape.mode == DrawingMode::CIRCLE_MODIFIED_MIDPOINT) &&
                 shape.points.size() >= 2) {
-                
+
                 // Calculate circle radius
                 int radius = (int)sqrt(
-                    pow(shape.points[1].x - shape.points[0].x, 2) +
-                    pow(shape.points[1].y - shape.points[0].y, 2)
+                        pow(shape.points[1].x - shape.points[0].x, 2) +
+                        pow(shape.points[1].y - shape.points[0].y, 2)
                 );
-                
+
                 // Check if click point is inside this circle
                 if (IsPointInCircle(x, y, shape.points[0].x, shape.points[0].y, radius)) {
                     // Update the shape's fill mode
                     shape.fillMode = m_currentFillMode;
-                    
+
                     // Rebuild buffer to ensure proper rendering with fills
                     RebuildOffscreenBuffer();
-                    
+
                     InvalidateRect(m_hwnd, NULL, TRUE);
                     return; // Fill the first circle found and exit
                 }
             }
-              // Check if it's a square shape and if click is inside it
-            if (shape.mode == DrawingMode::SQUARE && 
+            // Check if it's a square shape and if click is inside it
+            if (shape.mode == DrawingMode::SQUARE &&
                 shape.points.size() >= 2 &&
                 m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
-                
+
                 // Calculate square boundaries
                 int centerX = shape.points[0].x;
                 int centerY = shape.points[0].y;
                 int halfSize = (int)sqrt(
-                    pow(shape.points[1].x - centerX, 2) +
-                    pow(shape.points[1].y - centerY, 2)
+                        pow(shape.points[1].x - centerX, 2) +
+                        pow(shape.points[1].y - centerY, 2)
                 );
-                
+
                 // Check if click point is inside this square
                 if (x >= centerX - halfSize && x <= centerX + halfSize &&
                     y >= centerY - halfSize && y <= centerY + halfSize) {
                     // Update the shape's fill mode
                     shape.fillMode = m_currentFillMode;
-                    
+
                     // Rebuild buffer to ensure proper rendering with fills
                     RebuildOffscreenBuffer();
-                    
+
                     InvalidateRect(m_hwnd, NULL, TRUE);
                     return; // Fill the first square found and exit
                 }
             }
-              // Check if it's a rectangle shape and if click is inside it
-            if (shape.mode == DrawingMode::RECTANGLE && 
+            // Check if it's a rectangle shape and if click is inside it
+            if (shape.mode == DrawingMode::RECTANGLE &&
                 shape.points.size() >= 2 &&
                 m_currentFillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
-                
+
                 // Calculate rectangle boundaries using center/vertex coordinate system
                 int centerX = shape.points[0].x;
                 int centerY = shape.points[0].y;
                 int vertexX = shape.points[1].x;
                 int vertexY = shape.points[1].y;
-                
+
                 int halfWidth = abs(vertexX - centerX);
                 int halfHeight = abs(vertexY - centerY);
-                
+
                 int left = centerX - halfWidth;
                 int right = centerX + halfWidth;
                 int top = centerY - halfHeight;
                 int bottom = centerY + halfHeight;
-                
+
                 // Check if click point is inside this rectangle
                 if (x >= left && x <= right && y >= top && y <= bottom) {
                     // Update the shape's fill mode
                     shape.fillMode = m_currentFillMode;
-                    
+
                     // Rebuild buffer to ensure proper rendering with fills
                     RebuildOffscreenBuffer();
-                    
+
                     InvalidateRect(m_hwnd, NULL, TRUE);
                     return; // Fill the first rectangle found and exit
                 }
@@ -941,13 +1178,153 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             InvalidateRect(m_hwnd, NULL, TRUE);
         }
             break;
+        case DrawingMode::POINT_CLIP_RECT:
+        case DrawingMode::POINT_CLIP_SQUARE:
+        case DrawingMode::POINT_CLIP_CIRCLE:
+        {
+            // Collect window and point
+            if (m_currentPoints.size() == 0) {
+                // First click: start window (rectangle, square, or circle center)
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;
+            } else if (m_currentPoints.size() == 1) {
+                // Second click: window (corner, edge, or radius)
+                m_currentPoints.push_back(newPoint);
+            } else if (m_currentPoints.size() == 2) {
+                // Third click: point to test
+                m_currentPoints.push_back(newPoint);
+                int px = m_currentPoints[2].x, py = m_currentPoints[2].y;
+                bool inside = false;
+                if (m_currentDrawingMode == DrawingMode::POINT_CLIP_RECT) {
+                    int cx = m_currentPoints[0].x, cy = m_currentPoints[0].y;
+                    int vx = m_currentPoints[1].x, vy = m_currentPoints[1].y;
+                    int xLeft = std::min(cx, vx), xRight = std::max(cx, vx);
+                    int yTop = std::min(cy, vy), yBottom = std::max(cy, vy);
+                    inside = ClipPointRectangle(px, py, xLeft, xRight, yTop, yBottom);
+                } else if (m_currentDrawingMode == DrawingMode::POINT_CLIP_SQUARE) {
+                    int cx = m_currentPoints[0].x, cy = m_currentPoints[0].y;
+                    int vx = m_currentPoints[1].x, vy = m_currentPoints[1].y;
+                    int size = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    inside = ClipPointSquare(px, py, cx-size, 2*size);
+                } else if (m_currentDrawingMode == DrawingMode::POINT_CLIP_CIRCLE) {
+                    int cx = m_currentPoints[0].x, cy = m_currentPoints[0].y;
+                    int vx = m_currentPoints[1].x, vy = m_currentPoints[1].y;
+                    int r = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    inside = ClipPointCircle(px, py, cx, cy, r);
+                }
+                if (inside) {
+                    // Draw the point if inside
+                    SetPixel(m_offscreenDC, m_currentPoints[2].x, m_currentPoints[2].y, m_currentColor);
+                }
+                m_isDrawing = false;
+                m_currentPoints.clear();
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+        }
+            break;
+        case DrawingMode::LINE_CLIP_RECT:
+        case DrawingMode::LINE_CLIP_SQUARE:
+        case DrawingMode::LINE_CLIP_CIRCLE:
+        {
+            // Collect window and line
+            if (m_currentPoints.size() == 0) {
+                // First click: window center
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;
+            } else if (m_currentPoints.size() == 1) {
+                // Second click: window corner/edge/radius
+                m_currentPoints.push_back(newPoint);
+            } else if (m_currentPoints.size() == 2) {
+                // Third click: line start
+                m_currentPoints.push_back(newPoint);
+            } else if (m_currentPoints.size() == 3) {
+                // Fourth click: line end
+                m_currentPoints.push_back(newPoint);
+                int x1 = m_currentPoints[2].x, y1 = m_currentPoints[2].y;
+                int x2 = m_currentPoints[3].x, y2 = m_currentPoints[3].y;
+                bool clipped = false;
+                if (m_currentDrawingMode == DrawingMode::LINE_CLIP_RECT) {
+                    int cx = m_currentPoints[0].x, cy = m_currentPoints[0].y;
+                    int vx = m_currentPoints[1].x, vy = m_currentPoints[1].y;
+                    int xLeft = std::min(cx, vx), xRight = std::max(cx, vx);
+                    int yTop = std::min(cy, vy), yBottom = std::max(cy, vy);
+                    clipped = CohenSutherlandLineClip(x1, y1, x2, y2, xLeft, xRight, yTop, yBottom);
+                } else if (m_currentDrawingMode == DrawingMode::LINE_CLIP_SQUARE) {
+                    int cx = m_currentPoints[0].x, cy = m_currentPoints[0].y;
+                    int vx = m_currentPoints[1].x, vy = m_currentPoints[1].y;
+                    int size = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    clipped = SquareLineClip(x1, y1, x2, y2, cx-size, cy-size, 2*size);
+                } else if (m_currentDrawingMode == DrawingMode::LINE_CLIP_CIRCLE) {
+                    int cx = m_currentPoints[0].x, cy = m_currentPoints[0].y;
+                    int vx = m_currentPoints[1].x, vy = m_currentPoints[1].y;
+                    int r = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+                    clipped = CircleLineClip(x1, y1, x2, y2, cx, cy, r);
+                }
+                if (clipped) {
+                    DrawLineBresenham(m_offscreenDC, x1, y1, x2, y2, m_currentColor);
+                }
+                m_isDrawing = false;
+                m_currentPoints.clear();
+                InvalidateRect(m_hwnd, NULL, TRUE);
+            }
+        }
+            break;
+        case DrawingMode::POLYGON_CLIP_RECT:
+        {
+            // Collect window and polygon points
+            if (m_currentPoints.size() < 2) {
+                m_currentPoints.push_back(newPoint);
+                m_isDrawing = true;
+            } else if (m_currentPoints.size() == 2) {
+                // Start collecting polygon points
+                m_currentPoints.push_back(newPoint);
+            } else {
+                // Add polygon points until right click
+                m_currentPoints.push_back(newPoint);
+            }
+            // On right click, finish polygon and clip
+            // (This logic should be handled in the right-click handler, similar to POLYGON mode)
+        }
+            break;
+    }
+
+    // New clipping workflow
+    if (m_clippingStep == ClippingStep::DrawWindow) {
+        std::cout << "Adding window point: (" << x << "," << y << ")" << std::endl;
+        m_clippingWindowPoints.push_back(Point(x, y));
+        std::cout << "Window points count: " << m_clippingWindowPoints.size() << std::endl;
+        if (m_clippingWindowPoints.size() == 2) {
+            std::cout << "Window complete, moving to DrawShape step" << std::endl;
+            m_clippingStep = ClippingStep::DrawShape;
+        }
+        InvalidateRect(m_hwnd, NULL, TRUE);
+        return;
+    } else if (m_clippingStep == ClippingStep::DrawShape) {
+        std::cout << "Adding shape point: (" << x << "," << y << ")" << std::endl;
+        // For line/point: collect points, for polygon: collect until Enter
+        if (m_lastClippingMode == DrawingMode::LINE_CLIP_RECT || m_lastClippingMode == DrawingMode::LINE_CLIP_SQUARE || m_lastClippingMode == DrawingMode::LINE_CLIP_CIRCLE) {
+            m_clippingShapePoints.push_back(Point(x, y));
+            if (m_clippingShapePoints.size() == 2) {
+                std::cout << "Line complete, ready to clip" << std::endl;
+                m_clippingStep = ClippingStep::ReadyToClip;
+            }
+        } else if (m_lastClippingMode == DrawingMode::POINT_CLIP_RECT || m_lastClippingMode == DrawingMode::POINT_CLIP_SQUARE || m_lastClippingMode == DrawingMode::POINT_CLIP_CIRCLE) {
+            m_clippingShapePoints.push_back(Point(x, y));
+            std::cout << "Point complete, ready to clip" << std::endl;
+            m_clippingStep = ClippingStep::ReadyToClip;
+        } else if (m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT) {
+            m_clippingShapePoints.push_back(Point(x, y));
+            // User presses Enter to finish polygon
+        }
+        InvalidateRect(m_hwnd, NULL, TRUE);
+        return;
     }
 }
 
 // Handle mouse move
 void GraphicsWindow::HandleMouseMove(int x, int y) {
     Point newPos(x, y);
-    
+
     // Only update if mouse actually moved (reduce unnecessary redraws)
     if (newPos.x != m_lastMousePos.x || newPos.y != m_lastMousePos.y) {
         m_lastMousePos = newPos;
@@ -957,11 +1334,11 @@ void GraphicsWindow::HandleMouseMove(int x, int y) {
             // Only invalidate a small region around the preview line instead of the whole window
             RECT invalidRect;
             if (!m_currentPoints.empty()) {
-                                 int minX = std::min(m_currentPoints[0].x, m_lastMousePos.x) - 5;
+                int minX = std::min(m_currentPoints[0].x, m_lastMousePos.x) - 5;
                 int maxX = std::max(m_currentPoints[0].x, m_lastMousePos.x) + 5;
                 int minY = std::min(m_currentPoints[0].y, m_lastMousePos.y) - 5;
                 int maxY = std::max(m_currentPoints[0].y, m_lastMousePos.y) + 5;
-                
+
                 SetRect(&invalidRect, minX, minY, maxX, maxY);
                 InvalidateRect(m_hwnd, &invalidRect, TRUE);
             }
@@ -1111,9 +1488,31 @@ void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
         case MENU_FILE_SAVE:
             SaveToFile();
             break;
-        
+
         case MENU_FILE_LOAD:
             LoadFromFile();
+            break;
+
+        case MENU_CLIP_POINT_RECTANGLE:
+            SetDrawingMode(DrawingMode::POINT_CLIP_RECT);
+            break;
+        case MENU_CLIP_LINE_RECTANGLE:
+            SetDrawingMode(DrawingMode::LINE_CLIP_RECT);
+            break;
+        case MENU_CLIP_POLYGON_RECTANGLE:
+            SetDrawingMode(DrawingMode::POLYGON_CLIP_RECT);
+            break;
+        case MENU_CLIP_POINT_SQUARE:
+            SetDrawingMode(DrawingMode::POINT_CLIP_SQUARE);
+            break;
+        case MENU_CLIP_LINE_SQUARE:
+            SetDrawingMode(DrawingMode::LINE_CLIP_SQUARE);
+            break;
+        case MENU_CLIP_POINT_CIRCLE:
+            SetDrawingMode(DrawingMode::POINT_CLIP_CIRCLE);
+            break;
+        case MENU_CLIP_LINE_CIRCLE:
+            SetDrawingMode(DrawingMode::LINE_CLIP_CIRCLE);
             break;
     }
 }
@@ -1129,27 +1528,27 @@ void GraphicsWindow::RedrawAll() {
             switch (shape.mode) {
                 case DrawingMode::LINE_DDA:
                     DrawLineDDA(hdc, shape.points[0].x, shape.points[0].y,
-                               shape.points[1].x, shape.points[1].y, shape.color);
+                                shape.points[1].x, shape.points[1].y, shape.color);
                     break;
-                    
+
                 case DrawingMode::LINE_BRESENHAM:
                     DrawLineBresenham(hdc, shape.points[0].x, shape.points[0].y,
-                                     shape.points[1].x, shape.points[1].y, shape.color);
-                    break;
-                    
-                case DrawingMode::LINE_PARAMETRIC:
-                    DrawLineParametric(hdc, shape.points[0].x, shape.points[0].y,
                                       shape.points[1].x, shape.points[1].y, shape.color);
                     break;
-                    
+
+                case DrawingMode::LINE_PARAMETRIC:
+                    DrawLineParametric(hdc, shape.points[0].x, shape.points[0].y,
+                                       shape.points[1].x, shape.points[1].y, shape.color);
+                    break;
+
                 case DrawingMode::CIRCLE_DIRECT:
                 {
                     int radius = (int)sqrt(
-                        pow(shape.points[1].x - shape.points[0].x, 2) +
-                        pow(shape.points[1].y - shape.points[0].y, 2)
+                            pow(shape.points[1].x - shape.points[0].x, 2) +
+                            pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircle1(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
-                    
+
                     // Apply fill mode if set
                     if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                         FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1160,15 +1559,15 @@ void GraphicsWindow::RedrawAll() {
                     }
                 }
                     break;
-                    
+
                 case DrawingMode::CIRCLE_POLAR:
                 {
                     int radius = (int)sqrt(
-                        pow(shape.points[1].x - shape.points[0].x, 2) +
-                        pow(shape.points[1].y - shape.points[0].y, 2)
+                            pow(shape.points[1].x - shape.points[0].x, 2) +
+                            pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircle2(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
-                    
+
                     // Apply fill mode if set
                     if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                         FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1179,15 +1578,15 @@ void GraphicsWindow::RedrawAll() {
                     }
                 }
                     break;
-                    
+
                 case DrawingMode::CIRCLE_ITERATIVE_POLAR:
                 {
                     int radius = (int)sqrt(
-                        pow(shape.points[1].x - shape.points[0].x, 2) +
-                        pow(shape.points[1].y - shape.points[0].y, 2)
+                            pow(shape.points[1].x - shape.points[0].x, 2) +
+                            pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircle3(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
-                    
+
                     // Apply fill mode if set
                     if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                         FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1198,16 +1597,16 @@ void GraphicsWindow::RedrawAll() {
                     }
                 }
                     break;
-                    
+
                 case DrawingMode::CIRCLE_MIDPOINT:
                 {
                     int radius = (int)sqrt(
-                        pow(shape.points[1].x - shape.points[0].x, 2) +
-                        pow(shape.points[1].y - shape.points[0].y, 2)
+                            pow(shape.points[1].x - shape.points[0].x, 2) +
+                            pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     std::cout << radius << '\n';
                     DrawCircleBresenham(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
-                    
+
                     // Apply fill mode if set
                     if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                         FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1218,15 +1617,15 @@ void GraphicsWindow::RedrawAll() {
                     }
                 }
                     break;
-                    
+
                 case DrawingMode::CIRCLE_MODIFIED_MIDPOINT:
                 {
                     int radius = (int)sqrt(
-                        pow(shape.points[1].x - shape.points[0].x, 2) +
-                        pow(shape.points[1].y - shape.points[0].y, 2)
+                            pow(shape.points[1].x - shape.points[0].x, 2) +
+                            pow(shape.points[1].y - shape.points[0].y, 2)
                     );
                     DrawCircleDDA1(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
-                    
+
                     // Apply fill mode if set
                     if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                         FillCircleWithLines(hdc, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1237,7 +1636,7 @@ void GraphicsWindow::RedrawAll() {
                     }
                 }
                     break;
-                    
+
                 case DrawingMode::ELLIPSE_DIRECT:
                 {
                     int radiusX = abs(shape.points[1].x - shape.points[0].x);
@@ -1245,7 +1644,7 @@ void GraphicsWindow::RedrawAll() {
                     DrawEllipse1(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
                 }
                     break;
-                    
+
                 case DrawingMode::ELLIPSE_POLAR:
                 {
                     int radiusX = abs(shape.points[1].x - shape.points[0].x);
@@ -1253,7 +1652,7 @@ void GraphicsWindow::RedrawAll() {
                     DrawEllipse2(hdc, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
                 }
                     break;
-                    
+
                 case DrawingMode::ELLIPSE_MIDPOINT:
                 {
                     int radiusX = abs(shape.points[1].x - shape.points[0].x);
@@ -1267,63 +1666,63 @@ void GraphicsWindow::RedrawAll() {
                         int centerX = shape.points[0].x;
                         int centerY = shape.points[0].y;
                         int halfSize = (int)sqrt(
-                            pow(shape.points[1].x - centerX, 2) +
-                            pow(shape.points[1].y - centerY, 2)
+                                pow(shape.points[1].x - centerX, 2) +
+                                pow(shape.points[1].y - centerY, 2)
                         );
-                        
+
                         // Draw square using our DrawSquare function
                         DrawSquare(hdc, centerX, centerY, halfSize, shape.color);
-                          // Apply Hermite fill if set
+                        // Apply Hermite fill if set
                         if (shape.fillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
                             FillSquareWithVerticalHermite(hdc, centerX, centerY, halfSize, shape.color);
                         }
                     }
                 }
                     break;
-                
+
                 case DrawingMode::RECTANGLE:
                 {
                     if (shape.points.size() >= 2) {
                         // Draw rectangle using our DrawRectangle function
                         DrawRectangle(hdc, shape.points[0].x, shape.points[0].y,
-                                    shape.points[1].x, shape.points[1].y, shape.color);
+                                      shape.points[1].x, shape.points[1].y, shape.color);
                     }
                 }
                     break;
-                
+
                 case DrawingMode::POLYGON:
                 {
                     if (shape.points.size() >= 3) {
                         // Draw polygon outline
                         for (size_t i = 0; i < shape.points.size() - 1; i++) {
                             DrawLineBresenham(hdc, shape.points[i].x, shape.points[i].y,
-                                             shape.points[i + 1].x, shape.points[i + 1].y, shape.color);
+                                              shape.points[i + 1].x, shape.points[i + 1].y, shape.color);
                         }
                         // Close the polygon
                         DrawLineBresenham(hdc, shape.points.back().x, shape.points.back().y,
-                                         shape.points[0].x, shape.points[0].y, shape.color);
-                        
+                                          shape.points[0].x, shape.points[0].y, shape.color);
+
                         // Apply polygon fill if set
-                        if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL || 
+                        if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL ||
                             shape.fillMode == FillMode::POLYGON_NONCONVEX_FILL) {
-                            
+
                             PolygonPoint* pointsArray = new PolygonPoint[shape.points.size()];
                             for (size_t i = 0; i < shape.points.size(); i++) {
                                 pointsArray[i] = PolygonPoint(shape.points[i].x, shape.points[i].y);
                             }
-                            
+
                             if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL) {
                                 ConvexFill(hdc, pointsArray, shape.points.size(), shape.color);
                             } else {
                                 NonConvexFill(hdc, pointsArray, shape.points.size(), shape.color);
                             }
-                            
+
                             delete[] pointsArray;
                         }
                     }
                 }
                     break;
-                
+
                 default:
                     // TODO: Implement other shape algorithms
                     break;
@@ -1403,10 +1802,10 @@ void GraphicsWindow::RedrawAll() {
                     int centerX = m_currentPoints[0].x;
                     int centerY = m_currentPoints[0].y;
                     int halfSize = (int)sqrt(
-                        pow(m_lastMousePos.x - centerX, 2) +
-                        pow(m_lastMousePos.y - centerY, 2)
+                            pow(m_lastMousePos.x - centerX, 2) +
+                            pow(m_lastMousePos.y - centerY, 2)
                     );
-                    
+
                     HPEN tempPen = CreatePen(PS_DOT, 1, m_currentColor);
                     HPEN oldPen = (HPEN)SelectObject(hdc, tempPen);
 
@@ -1436,14 +1835,14 @@ void GraphicsWindow::RedrawAll() {
                     int centerY = m_currentPoints[0].y;
                     int cornerX = m_lastMousePos.x;
                     int cornerY = m_lastMousePos.y;
-                    
+
                     // Calculate rectangle corners based on center and corner point
                     int width = abs(cornerX - centerX) * 2;
                     int height = abs(cornerY - centerY) * 2;
-                    
-                    Rectangle(hdc, 
-                        centerX - width/2, centerY - height/2,
-                        centerX + width/2, centerY + height/2);
+
+                    Rectangle(hdc,
+                              centerX - width/2, centerY - height/2,
+                              centerX + width/2, centerY + height/2);
 
                     SelectObject(hdc, oldPen);
                     SelectObject(hdc, oldBrush);
@@ -1485,10 +1884,10 @@ void GraphicsWindow::RedrawAll() {
                     for (size_t i = 0; i < m_currentPoints.size(); i++) {
                         hermitePoints[i] = HermitePoint(m_currentPoints[i].x, m_currentPoints[i].y);
                     }
-                    
+
                     // Draw Cardinal Spline preview with default tension (0.5) and 50 points per segment
                     DrawCardinalSpline(hdc, hermitePoints, m_currentPoints.size(), 0.5, 50, m_currentColor);
-                    
+
                     delete[] hermitePoints;
                 }
 
@@ -1524,6 +1923,69 @@ void GraphicsWindow::RedrawAll() {
         }
     }
 
+    // Draw clipping window if in any clipping mode
+    if (m_lastClippingMode != DrawingMode::NONE && m_clippingWindowPoints.size() == 2) {
+        TextOut(hdc, 10, 100, "Drawing Clipping Window", 24);
+        char debugMsg[128];
+        sprintf(debugMsg, "P1: (%d,%d)  P2: (%d,%d)",
+                m_clippingWindowPoints[0].x, m_clippingWindowPoints[0].y,
+                m_clippingWindowPoints[1].x, m_clippingWindowPoints[1].y);
+        TextOut(hdc, 10, 120, debugMsg, strlen(debugMsg));
+        HPEN redDashed = CreatePen(PS_DASH, 2, RGB(255,0,0));
+        HPEN oldPen = (HPEN)SelectObject(hdc, redDashed);
+        if (m_lastClippingMode == DrawingMode::LINE_CLIP_RECT || m_lastClippingMode == DrawingMode::POINT_CLIP_RECT || m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT) {
+            int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+            int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+            int xLeft = std::min(cx, vx), xRight = std::max(cx, vx);
+            int yTop = std::min(cy, vy), yBottom = std::max(cy, vy);
+            MoveToEx(hdc, xLeft, yTop, NULL);
+            LineTo(hdc, xRight, yTop);
+            LineTo(hdc, xRight, yBottom);
+            LineTo(hdc, xLeft, yBottom);
+            LineTo(hdc, xLeft, yTop);
+        } else if (m_lastClippingMode == DrawingMode::LINE_CLIP_SQUARE || m_lastClippingMode == DrawingMode::POINT_CLIP_SQUARE) {
+            int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+            int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+            int size = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+            int left = cx-size, right = cx+size, top = cy-size, bottom = cy+size;
+            MoveToEx(hdc, left, top, NULL);
+            LineTo(hdc, right, top);
+            LineTo(hdc, right, bottom);
+            LineTo(hdc, left, bottom);
+            LineTo(hdc, left, top);
+        } else if (m_lastClippingMode == DrawingMode::LINE_CLIP_CIRCLE || m_lastClippingMode == DrawingMode::POINT_CLIP_CIRCLE) {
+            int cx = m_clippingWindowPoints[0].x, cy = m_clippingWindowPoints[0].y;
+            int vx = m_clippingWindowPoints[1].x, vy = m_clippingWindowPoints[1].y;
+            int r = (int)std::sqrt((vx-cx)*(vx-cx)+(vy-cy)*(vy-cy));
+            Arc(hdc, cx-r, cy-r, cx+r, cy+r, cx+r, cy, cx+r, cy);
+        }
+        SelectObject(hdc, oldPen);
+        DeleteObject(redDashed);
+    }
+    // (Polygon preview and result drawing moved to WM_PAINT handler)
+    // Draw helper text
+    SetTextColor(hdc, RGB(200,0,0));
+    SetBkMode(hdc, TRANSPARENT);
+    std::string helperText;
+    if (m_clippingStep == ClippingStep::DrawWindow) {
+        helperText = "Draw the clipping window (2 clicks).";
+    } else if (m_clippingStep == ClippingStep::DrawShape) {
+        if (m_lastClippingMode == DrawingMode::POLYGON_CLIP_RECT) {
+            helperText = "Draw the polygon to be clipped (click for each vertex, Enter to finish).";
+        } else if (m_lastClippingMode == DrawingMode::LINE_CLIP_RECT || m_lastClippingMode == DrawingMode::LINE_CLIP_SQUARE || m_lastClippingMode == DrawingMode::LINE_CLIP_CIRCLE) {
+            helperText = "Draw the line to be clipped (2 clicks).";
+        } else {
+            helperText = "Click to place the point to be clipped.";
+        }
+    } else if (m_clippingStep == ClippingStep::ReadyToClip) {
+        helperText = "Press Enter to perform clipping.";
+    } else if (m_clippingStep == ClippingStep::ShowResult) {
+        helperText = "Clipped result shown. Right click to start a new clipping operation.";
+    }
+    if (!helperText.empty()) {
+        TextOut(hdc, 10, 10, helperText.c_str(), helperText.length());
+    }
+
     ReleaseDC(m_hwnd, hdc);
 }
 
@@ -1532,10 +1994,10 @@ void GraphicsWindow::ClearCanvas() {
     m_shapes.clear();
     m_isDrawing = false;
     m_currentPoints.clear();
-    
+
     // Clear offscreen buffer
     ClearOffscreenBuffer();
-    
+
     InvalidateRect(m_hwnd, NULL, TRUE);
 }
 
@@ -1550,13 +2012,28 @@ void GraphicsWindow::Run() {
 
 // Set drawing mode
 void GraphicsWindow::SetDrawingMode(DrawingMode mode) {
+    std::cout << "SetDrawingMode called with mode: " << (int)mode << std::endl;
     m_currentDrawingMode = mode;
     m_isDrawing = false;
     m_currentPoints.clear();
-    
+
     // Reset fill mode when switching to drawing mode
     m_fillMode = false;
-    
+
+    // If entering a clipping mode, start new workflow
+    if (mode == DrawingMode::LINE_CLIP_RECT || mode == DrawingMode::LINE_CLIP_SQUARE || mode == DrawingMode::LINE_CLIP_CIRCLE ||
+        mode == DrawingMode::POINT_CLIP_RECT || mode == DrawingMode::POINT_CLIP_SQUARE || mode == DrawingMode::POINT_CLIP_CIRCLE ||
+        mode == DrawingMode::POLYGON_CLIP_RECT) {
+        std::cout << "Entering clipping mode, setting up workflow" << std::endl;
+        ResetClippingState();
+        m_clippingStep = ClippingStep::DrawWindow;
+        m_lastClippingMode = mode;
+        std::cout << "m_lastClippingMode set to: " << (int)m_lastClippingMode << std::endl;
+    } else {
+        std::cout << "Not a clipping mode, resetting clipping state" << std::endl;
+        ResetClippingState();
+        m_lastClippingMode = DrawingMode::NONE;
+    }
     InvalidateRect(m_hwnd, NULL, TRUE);
 }
 
@@ -1593,9 +2070,9 @@ void GraphicsWindow::SetMouseCursor(HCURSOR cursor) {
 
 // Set fill mode
 void GraphicsWindow::SetFillMode(FillMode mode) {    m_currentFillMode = mode;
-      // Enable fill mode for circle fill modes and polygon operations
-    m_fillMode = (mode == FillMode::CIRCLE_FILL_LINES || 
-                  mode == FillMode::CIRCLE_FILL_QUARTER || 
+    // Enable fill mode for circle fill modes and polygon operations
+    m_fillMode = (mode == FillMode::CIRCLE_FILL_LINES ||
+                  mode == FillMode::CIRCLE_FILL_QUARTER ||
                   mode == FillMode::CIRCLE_FILL_CIRCLES ||
                   mode == FillMode::POLYGON_CONVEX_FILL ||
                   mode == FillMode::POLYGON_NONCONVEX_FILL ||
@@ -1603,7 +2080,7 @@ void GraphicsWindow::SetFillMode(FillMode mode) {    m_currentFillMode = mode;
                   mode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON ||
                   mode == FillMode::SQUARE_FILL_HERMITE_VERTICAL ||
                   mode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL);
-    
+
     // Reset drawing state when entering fill mode
     if (m_fillMode) {
         m_isDrawing = false;
@@ -1611,7 +2088,7 @@ void GraphicsWindow::SetFillMode(FillMode mode) {    m_currentFillMode = mode;
         m_isDrawingPolygon = false;
         m_polygonPoints.clear();
     }
-    
+
     InvalidateRect(m_hwnd, NULL, TRUE);
 }
 
@@ -1623,12 +2100,12 @@ void GraphicsWindow::SetLineThickness(int thickness) {
 
 // Save to file (placeholder)
 void GraphicsWindow::SaveToFile() {
-    OPENFILENAME ofn;              
-    char szFile[MAX_PATH] = "";   
+    OPENFILENAME ofn;
+    char szFile[MAX_PATH] = "";
 
     ZeroMemory(&ofn, sizeof(ofn));
     ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = m_hwnd;  
+    ofn.hwndOwner = m_hwnd;
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = sizeof(szFile);
 
@@ -1662,7 +2139,7 @@ void GraphicsWindow::SaveToFile() {
                 outFile.write(reinterpret_cast<const char*>(shape.points.data()), pointCnt * sizeof(Point));
             }
         }
-        
+
         outFile.close();
     }
 }
@@ -1723,16 +2200,16 @@ void GraphicsWindow::LoadFromFile() {
 // Create offscreen buffer for double buffering
 void GraphicsWindow::CreateOffscreenBuffer(int width, int height) {
     CleanupOffscreenBuffer();
-    
+
     m_canvasWidth = width;
     m_canvasHeight = height;
-    
+
     HDC hdc = GetDC(m_hwnd);
     m_offscreenDC = CreateCompatibleDC(hdc);
     m_offscreenBitmap = CreateCompatibleBitmap(hdc, width, height);
     m_oldBitmap = (HBITMAP)SelectObject(m_offscreenDC, m_offscreenBitmap);
     ReleaseDC(m_hwnd, hdc);
-    
+
     ClearOffscreenBuffer();
 }
 
@@ -1768,27 +2245,27 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
     switch (shape.mode) {
         case DrawingMode::LINE_DDA:
             DrawLineDDA(m_offscreenDC, shape.points[0].x, shape.points[0].y,
-                       shape.points[1].x, shape.points[1].y, shape.color);
+                        shape.points[1].x, shape.points[1].y, shape.color);
             break;
-            
+
         case DrawingMode::LINE_BRESENHAM:
             DrawLineBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y,
-                             shape.points[1].x, shape.points[1].y, shape.color);
-            break;
-            
-        case DrawingMode::LINE_PARAMETRIC:
-            DrawLineParametric(m_offscreenDC, shape.points[0].x, shape.points[0].y,
                               shape.points[1].x, shape.points[1].y, shape.color);
             break;
-            
+
+        case DrawingMode::LINE_PARAMETRIC:
+            DrawLineParametric(m_offscreenDC, shape.points[0].x, shape.points[0].y,
+                               shape.points[1].x, shape.points[1].y, shape.color);
+            break;
+
         case DrawingMode::CIRCLE_DIRECT:
         {
             int radius = (int)sqrt(
-                pow(shape.points[1].x - shape.points[0].x, 2) +
-                pow(shape.points[1].y - shape.points[0].y, 2)
+                    pow(shape.points[1].x - shape.points[0].x, 2) +
+                    pow(shape.points[1].y - shape.points[0].y, 2)
             );
             DrawCircle1(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
-            
+
             // Apply fill mode if set
             if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                 FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1799,15 +2276,15 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             }
         }
             break;
-            
+
         case DrawingMode::CIRCLE_POLAR:
         {
             int radius = (int)sqrt(
-                pow(shape.points[1].x - shape.points[0].x, 2) +
-                pow(shape.points[1].y - shape.points[0].y, 2)
+                    pow(shape.points[1].x - shape.points[0].x, 2) +
+                    pow(shape.points[1].y - shape.points[0].y, 2)
             );
             DrawCircle2(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
-            
+
             // Apply fill mode if set
             if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                 FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1818,15 +2295,15 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             }
         }
             break;
-            
+
         case DrawingMode::CIRCLE_ITERATIVE_POLAR:
         {
             int radius = (int)sqrt(
-                pow(shape.points[1].x - shape.points[0].x, 2) +
-                pow(shape.points[1].y - shape.points[0].y, 2)
+                    pow(shape.points[1].x - shape.points[0].x, 2) +
+                    pow(shape.points[1].y - shape.points[0].y, 2)
             );
             DrawCircle3(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
-            
+
             // Apply fill mode if set
             if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                 FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1837,15 +2314,15 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             }
         }
             break;
-            
+
         case DrawingMode::CIRCLE_MIDPOINT:
         {
             int radius = (int)sqrt(
-                pow(shape.points[1].x - shape.points[0].x, 2) +
-                pow(shape.points[1].y - shape.points[0].y, 2)
+                    pow(shape.points[1].x - shape.points[0].x, 2) +
+                    pow(shape.points[1].y - shape.points[0].y, 2)
             );
             DrawCircleBresenham(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
-            
+
             // Apply fill mode if set
             if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                 FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1856,15 +2333,15 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             }
         }
             break;
-            
+
         case DrawingMode::CIRCLE_MODIFIED_MIDPOINT:
         {
             int radius = (int)sqrt(
-                pow(shape.points[1].x - shape.points[0].x, 2) +
-                pow(shape.points[1].y - shape.points[0].y, 2)
+                    pow(shape.points[1].x - shape.points[0].x, 2) +
+                    pow(shape.points[1].y - shape.points[0].y, 2)
             );
             DrawCircleDDA1(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
-            
+
             // Apply fill mode if set
             if (shape.fillMode == FillMode::CIRCLE_FILL_LINES) {
                 FillCircleWithLines(m_offscreenDC, shape.points[0].x, shape.points[0].y, radius, shape.color);
@@ -1875,7 +2352,7 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             }
         }
             break;
-            
+
         case DrawingMode::ELLIPSE_DIRECT:
         {
             int radiusX = abs(shape.points[1].x - shape.points[0].x);
@@ -1883,7 +2360,7 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             DrawEllipse1(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
         }
             break;
-            
+
         case DrawingMode::ELLIPSE_POLAR:
         {
             int radiusX = abs(shape.points[1].x - shape.points[0].x);
@@ -1891,7 +2368,7 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
             DrawEllipse2(m_offscreenDC, shape.points[0].x, shape.points[0].y, radiusX, radiusY, shape.color);
         }
             break;
-            
+
         case DrawingMode::ELLIPSE_MIDPOINT:
         {
             int radiusX = abs(shape.points[1].x - shape.points[0].x);
@@ -1905,60 +2382,60 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
                 int centerX = shape.points[0].x;
                 int centerY = shape.points[0].y;
                 int halfSize = (int)sqrt(
-                    pow(shape.points[1].x - centerX, 2) +
-                    pow(shape.points[1].y - centerY, 2)
+                        pow(shape.points[1].x - centerX, 2) +
+                        pow(shape.points[1].y - centerY, 2)
                 );
-                
+
                 // Draw square using our DrawSquare function
                 DrawSquare(m_offscreenDC, centerX, centerY, halfSize, shape.color);
-                  // Apply Hermite fill if set
+                // Apply Hermite fill if set
                 if (shape.fillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
                     FillSquareWithVerticalHermite(m_offscreenDC, centerX, centerY, halfSize, shape.color);
                 }
             }
         }
             break;
-              case DrawingMode::RECTANGLE:
+        case DrawingMode::RECTANGLE:
         {
             if (shape.points.size() >= 2) {
                 // Draw rectangle using our DrawRectangle function
                 DrawRectangle(m_offscreenDC, shape.points[0].x, shape.points[0].y,
-                            shape.points[1].x, shape.points[1].y, shape.color);
-                  // Apply Bezier fill if set
+                              shape.points[1].x, shape.points[1].y, shape.color);
+                // Apply Bezier fill if set
                 if (shape.fillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
                     FillRectangleWithHorizontalBezier(m_offscreenDC, shape.points[0].x, shape.points[0].y,
-                                                    shape.points[1].x, shape.points[1].y, shape.color);
+                                                      shape.points[1].x, shape.points[1].y, shape.color);
                 }
             }
         }
             break;
-              case DrawingMode::POLYGON:
+        case DrawingMode::POLYGON:
         {
             if (shape.points.size() >= 3) {
                 // Draw polygon outline
                 for (size_t i = 0; i < shape.points.size() - 1; i++) {
                     DrawLineBresenham(m_offscreenDC, shape.points[i].x, shape.points[i].y,
-                                     shape.points[i + 1].x, shape.points[i + 1].y, shape.color);
+                                      shape.points[i + 1].x, shape.points[i + 1].y, shape.color);
                 }
                 // Close the polygon
                 DrawLineBresenham(m_offscreenDC, shape.points.back().x, shape.points.back().y,
-                                 shape.points[0].x, shape.points[0].y, shape.color);
-                
+                                  shape.points[0].x, shape.points[0].y, shape.color);
+
                 // Apply polygon fill if set
-                if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL || 
+                if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL ||
                     shape.fillMode == FillMode::POLYGON_NONCONVEX_FILL) {
-                    
+
                     PolygonPoint* pointsArray = new PolygonPoint[shape.points.size()];
                     for (size_t i = 0; i < shape.points.size(); i++) {
                         pointsArray[i] = PolygonPoint(shape.points[i].x, shape.points[i].y);
                     }
-                    
+
                     if (shape.fillMode == FillMode::POLYGON_CONVEX_FILL) {
                         ConvexFill(m_offscreenDC, pointsArray, shape.points.size(), shape.color);
                     } else {
                         NonConvexFill(m_offscreenDC, pointsArray, shape.points.size(), shape.color);
                     }
-                    
+
                     delete[] pointsArray;
                 }
             }
@@ -1973,15 +2450,15 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
                 for (size_t i = 0; i < shape.points.size(); i++) {
                     hermitePoints[i] = HermitePoint(shape.points[i].x, shape.points[i].y);
                 }
-                
+
                 // Draw Cardinal Spline with default tension (0.5) and 50 points per segment
                 DrawCardinalSpline(m_offscreenDC, hermitePoints, shape.points.size(), 0.5, 50, shape.color);
-                
+
                 delete[] hermitePoints;
             }
         }
             break;
-            
+
         default:
             // TODO: Implement other shape algorithms
             break;
@@ -1991,14 +2468,23 @@ void GraphicsWindow::DrawShapeToBuffer(const Shape& shape) {
 // Rebuild offscreen buffer
 void GraphicsWindow::RebuildOffscreenBuffer() {
     if (!m_offscreenDC) return;
-    
+
     // Clear buffer
     ClearOffscreenBuffer();
-    
+
     // Redraw all shapes
     for (const auto& shape : m_shapes) {
         DrawShapeToBuffer(shape);
     }
+}
+
+// Add helper for resetting clipping state
+void GraphicsWindow::ResetClippingState() {
+    m_clippingStep = ClippingStep::None;
+    m_clippingWindowPoints.clear();
+    m_clippingShapePoints.clear();
+    m_clippedResultPoints.clear();
+    m_lastClippingMode = DrawingMode::NONE;
 }
 
 // ========================================
