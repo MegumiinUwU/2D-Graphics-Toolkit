@@ -17,6 +17,7 @@ A comprehensive Windows-based 2D graphics application implementing various compu
 - [Extending the Project](#extending-the-project)
 - [License](#license)
 
+<a id="features"></a>
 ## ✨ Features
 
 - **Interactive Drawing Interface**: Point-and-click interface for drawing various shapes
@@ -28,6 +29,7 @@ A comprehensive Windows-based 2D graphics application implementing various compu
 - **Curve Support**: Bezier, Hermite, and Cardinal Spline curves
 - **Optimized Rendering**: Double-buffered drawing for smooth performance
 
+<a id="implemented-algorithms"></a>
 ## 🎨 Implemented Algorithms
 
 ### Line Drawing Algorithms
@@ -76,6 +78,7 @@ A comprehensive Windows-based 2D graphics application implementing various compu
   - Fill rectangle with horizontal Bezier curves
   - Fill square with vertical Hermite curves
 
+<a id="project-structure"></a>
 ## 📁 Project Structure
 
 ```
@@ -159,6 +162,7 @@ A comprehensive Windows-based 2D graphics application implementing various compu
 └── README.md                   # This file
 ```
 
+<a id="requirements"></a>
 ## 💻 Requirements
 
 ### Software Requirements
@@ -177,6 +181,7 @@ A comprehensive Windows-based 2D graphics application implementing various compu
 - Windows API (Win32) - Pre-installed with Windows SDK
 - Standard C++ Library (C++17)
 
+<a id="building-the-project"></a>
 ## 🔨 Building the Project
 
 ### Using CMake (Command Line)
@@ -225,6 +230,7 @@ cmake --build . --config Release
 5. Select **Build → Build All** or press `Ctrl+Shift+B`
 6. Run with **Debug → Start Without Debugging** or press `Ctrl+F5`
 
+<a id="usage"></a>
 ## 🎮 Usage
 
 ### Basic Drawing
@@ -288,6 +294,7 @@ cmake --build . --config Release
 3. Right-click when done
 
 
+<a id="extending-the-project"></a>
 ## 🔧 Extending the Project
 
 ### Adding a New Drawing Algorithm
@@ -307,6 +314,7 @@ cmake --build . --config Release
 3. **Add** preview drawing in `HandleMouseMove()` if needed
 
 
+<a id="license"></a>
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
