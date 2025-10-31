@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.31)
-project(2D-Graphics-Project)
+project(2D-Graphics-Toolkit)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(2D-Graphics-Project
+add_executable(2D-Graphics-Toolkit
         main.cpp
         src/line/BresenhamLine.cpp
         src/line/DDALine.cpp

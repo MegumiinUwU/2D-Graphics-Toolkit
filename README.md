@@ -82,7 +82,7 @@ A comprehensive Windows-based 2D graphics application implementing various compu
 ## 📁 Project Structure
 
 ```
-2D-Graphics-Project/
+2D-Graphics-Toolkit/
 ├── include/                      # Header files
 │   ├── Bezier.h                 # Bezier curve declarations
 │   ├── CardinalSpline.h         # Cardinal spline declarations
@@ -188,8 +188,8 @@ A comprehensive Windows-based 2D graphics application implementing various compu
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/Hemdan47/2D-Graphics-Project.git
-cd 2D-Graphics-Project
+git clone https://github.com/Hemdan47/2D-Graphics-Toolkit.git
+cd 2D-Graphics-Toolkit
 ```
 
 2. **Create build directory**:
@@ -210,7 +210,7 @@ cmake --build . --config Release
 
 5. **Run the executable**:
 ```bash
-./Release/2D-Graphics-Project.exe
+./Release/2D-Graphics-Toolkit.exe
 ```
 
 ### Using CLion
