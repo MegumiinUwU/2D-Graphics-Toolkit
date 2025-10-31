@@ -30,64 +30,68 @@
 #define DEFAULT_WINDOW_WIDTH  1024
 #define DEFAULT_WINDOW_HEIGHT 768
 
-// Menu IDs for various operations
-#define MENU_FILE_NEW         1001
-#define MENU_FILE_SAVE        1002
-#define MENU_FILE_LOAD        1003
-#define MENU_FILE_EXIT        1004
-
-#define MENU_SHAPES_LINE      2001
-#define MENU_SHAPES_LINE_DDA      2011
-#define MENU_SHAPES_LINE_BRESENHAM 2012
-#define MENU_SHAPES_LINE_PARAMETRIC 2013
-#define MENU_SHAPES_CIRCLE    2002
-#define MENU_SHAPES_CIRCLE_DIRECT    2021
-#define MENU_SHAPES_CIRCLE_POLAR     2022
-#define MENU_SHAPES_CIRCLE_ITERATIVE 2023
-#define MENU_SHAPES_CIRCLE_MIDPOINT  2024
-#define MENU_SHAPES_CIRCLE_MODIFIED  2025
-#define MENU_SHAPES_CIRCLE_FILL      2005
-#define MENU_SHAPES_CIRCLE_FILL_LINES     2051
-#define MENU_SHAPES_CIRCLE_FILL_QUARTER   2052  
-#define MENU_SHAPES_CIRCLE_FILL_CIRCLES   2053
-#define MENU_SHAPES_ELLIPSE   2003
-#define MENU_SHAPES_ELLIPSE_DIRECT   2031
-#define MENU_SHAPES_ELLIPSE_POLAR    2032
-#define MENU_SHAPES_ELLIPSE_MIDPOINT 2033
-#define MENU_SHAPES_POLYGON   2004
-#define MENU_SHAPES_SQUARE    2005
-#define MENU_SHAPES_RECTANGLE 2006
-#define MENU_SHAPES_CARDINAL_SPLINE 2007
-#define MENU_SHAPES_BEZIER_CURVE 2008
-#define MENU_SHAPES_HERMITE_CURVE 2009
-
-#define MENU_COLORS_RED       3001
-#define MENU_COLORS_GREEN     3002
-#define MENU_COLORS_BLUE      3003
-#define MENU_COLORS_BLACK     3004
-#define MENU_COLORS_WHITE     3005
-#define MENU_COLORS_CUSTOM    3006
-
-#define MENU_FILL_NONE        4001
-#define MENU_FILL_SOLID       4002
-#define MENU_FILL_PATTERN     4003
-#define MENU_FILL_CIRCLE_LINES     4051
-#define MENU_FILL_CIRCLE_QUARTER   4052  
-#define MENU_FILL_CIRCLE_CIRCLES   4053
-#define MENU_FILL_POLYGON_CONVEX   4054
-#define MENU_FILL_POLYGON_NONCONVEX 4055
-#define MENU_FILL_FLOOD_RECURSIVE  4056
-#define MENU_FILL_FLOOD_NONRECURSIVE 4057
-#define MENU_FILL_SQUARE_HERMITE   4058
-#define MENU_FILL_RECTANGLE_BEZIER 4059
-
-#define MENU_TOOLS_CLEAR      5001
-#define MENU_TOOLS_ZOOM_IN    5002
-#define MENU_TOOLS_ZOOM_OUT   5003
-
-#define MENU_CURSOR_ARROW     6001
-#define MENU_CURSOR_HAND      6002
-#define MENU_CURSOR_CROSSHAIR 6003
+// Menu IDs
+enum MenuID {
+    // File operations
+    MENU_FILE_NEW = 1001,
+    MENU_FILE_SAVE,
+    MENU_FILE_LOAD,
+    MENU_FILE_EXIT,
+    
+    // Line algorithms
+    MENU_LINE_DDA = 2001,
+    MENU_LINE_BRESENHAM,
+    MENU_LINE_PARAMETRIC,
+    
+    // Circle algorithms
+    MENU_CIRCLE_DIRECT = 2010,
+    MENU_CIRCLE_POLAR,
+    MENU_CIRCLE_ITERATIVE,
+    MENU_CIRCLE_MIDPOINT,
+    MENU_CIRCLE_MODIFIED,
+    
+    // Ellipse algorithms
+    MENU_ELLIPSE_DIRECT = 2020,
+    MENU_ELLIPSE_POLAR,
+    MENU_ELLIPSE_MIDPOINT,
+    
+    // Polygon shapes
+    MENU_POLYGON = 2030,
+    MENU_SQUARE,
+    MENU_RECTANGLE,
+    
+    // Curve types
+    MENU_CURVE_CARDINAL = 2040,
+    MENU_CURVE_BEZIER,
+    MENU_CURVE_HERMITE,
+    
+    // Colors
+    MENU_COLOR_BLACK = 3001,
+    MENU_COLOR_RED,
+    MENU_COLOR_GREEN,
+    MENU_COLOR_BLUE,
+    MENU_COLOR_WHITE,
+    
+    // Fill modes
+    MENU_FILL_NONE = 4001,
+    MENU_FILL_CIRCLE_LINES,
+    MENU_FILL_CIRCLE_QUARTER,
+    MENU_FILL_CIRCLE_CIRCLES,
+    MENU_FILL_POLYGON_CONVEX,
+    MENU_FILL_POLYGON_NONCONVEX,
+    MENU_FILL_FLOOD_RECURSIVE,
+    MENU_FILL_FLOOD_NONRECURSIVE,
+    MENU_FILL_SQUARE_HERMITE,
+    MENU_FILL_RECTANGLE_BEZIER,
+    
+    // Tools
+    MENU_TOOLS_CLEAR = 5001,
+    
+    // Cursors
+    MENU_CURSOR_ARROW = 6001,
+    MENU_CURSOR_HAND,
+    MENU_CURSOR_CROSSHAIR
+};
 
 
 using namespace std;
@@ -328,94 +332,92 @@ bool GraphicsWindow::Initialize(HINSTANCE hInstance, int nCmdShow) {
     return true;
 }
 
-// Initialize menus
 void GraphicsWindow::InitializeMenus() {
     m_hMenuBar = CreateMenu();
 
     // File menu
-    HMENU hFileMenu = CreatePopupMenu();
-    AppendMenu(hFileMenu, MF_STRING, MENU_FILE_NEW, "New\tCtrl+N");
-    AppendMenu(hFileMenu, MF_STRING, MENU_FILE_SAVE, "Save\tCtrl+S");
-    AppendMenu(hFileMenu, MF_STRING, MENU_FILE_LOAD, "Open\tCtrl+O");
-    AppendMenu(hFileMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hFileMenu, MF_STRING, MENU_FILE_EXIT, "Exit\tAlt+F4");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFileMenu, "File");
+    HMENU hFile = CreatePopupMenu();
+    AppendMenu(hFile, MF_STRING, MENU_FILE_NEW, "New\tCtrl+N");
+    AppendMenu(hFile, MF_STRING, MENU_FILE_SAVE, "Save\tCtrl+S");
+    AppendMenu(hFile, MF_STRING, MENU_FILE_LOAD, "Open\tCtrl+O");
+    AppendMenu(hFile, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFile, MF_STRING, MENU_FILE_EXIT, "Exit\tAlt+F4");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFile, "File");
 
     // Shapes menu
-    HMENU hShapesMenu = CreatePopupMenu();
+    HMENU hShapes = CreatePopupMenu();
     
-    // Line submenu
-    HMENU hLineMenu = CreatePopupMenu();
-    AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_DDA, "DDA Algorithm");
-    AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_BRESENHAM, "Bresenham (Midpoint)");
-    AppendMenu(hLineMenu, MF_STRING, MENU_SHAPES_LINE_PARAMETRIC, "Parametric");
-    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hLineMenu, "Line");
+    HMENU hLine = CreatePopupMenu();
+    AppendMenu(hLine, MF_STRING, MENU_LINE_DDA, "DDA");
+    AppendMenu(hLine, MF_STRING, MENU_LINE_BRESENHAM, "Bresenham");
+    AppendMenu(hLine, MF_STRING, MENU_LINE_PARAMETRIC, "Parametric");
+    AppendMenu(hShapes, MF_POPUP, (UINT_PTR)hLine, "Line");
     
-    // Circle submenu
-    HMENU hCircleMenu = CreatePopupMenu();
-    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_DIRECT, "Direct Algorithm");
-    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_POLAR, "Polar Algorithm");
-    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_ITERATIVE, "Iterative Polar");
-    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_MIDPOINT, "Midpoint (Bresenham)");
-    AppendMenu(hCircleMenu, MF_STRING, MENU_SHAPES_CIRCLE_MODIFIED, "Modified Midpoint");
-    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCircleMenu, "Circle");
+    HMENU hCircle = CreatePopupMenu();
+    AppendMenu(hCircle, MF_STRING, MENU_CIRCLE_DIRECT, "Direct");
+    AppendMenu(hCircle, MF_STRING, MENU_CIRCLE_POLAR, "Polar");
+    AppendMenu(hCircle, MF_STRING, MENU_CIRCLE_ITERATIVE, "Iterative Polar");
+    AppendMenu(hCircle, MF_STRING, MENU_CIRCLE_MIDPOINT, "Midpoint");
+    AppendMenu(hCircle, MF_STRING, MENU_CIRCLE_MODIFIED, "Modified Midpoint");
+    AppendMenu(hShapes, MF_POPUP, (UINT_PTR)hCircle, "Circle");
     
-    // Ellipse submenu
-    HMENU hEllipseMenu = CreatePopupMenu();
-    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_DIRECT, "Direct Algorithm");
-    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_POLAR, "Polar Algorithm");    AppendMenu(hEllipseMenu, MF_STRING, MENU_SHAPES_ELLIPSE_MIDPOINT, "Midpoint (Bresenham)");    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hEllipseMenu, "Ellipse");    // Polygon submenu
-    HMENU hPolygonMenu = CreatePopupMenu();
-    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_POLYGON, "Polygon");
-    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_SQUARE, "Square");
-    AppendMenu(hPolygonMenu, MF_STRING, MENU_SHAPES_RECTANGLE, "Rectangle");
-    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hPolygonMenu, "Polygon");
-      // Curve submenu
-    HMENU hCurveMenu = CreatePopupMenu();
-    AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_CARDINAL_SPLINE, "Cardinal Spline");
-    AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_BEZIER_CURVE, "Bezier Curve");
-    AppendMenu(hCurveMenu, MF_STRING, MENU_SHAPES_HERMITE_CURVE, "Hermite Curve");
-    AppendMenu(hShapesMenu, MF_POPUP, (UINT_PTR)hCurveMenu, "Curve");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapesMenu, "Shapes");
+    HMENU hEllipse = CreatePopupMenu();
+    AppendMenu(hEllipse, MF_STRING, MENU_ELLIPSE_DIRECT, "Direct");
+    AppendMenu(hEllipse, MF_STRING, MENU_ELLIPSE_POLAR, "Polar");
+    AppendMenu(hEllipse, MF_STRING, MENU_ELLIPSE_MIDPOINT, "Midpoint");
+    AppendMenu(hShapes, MF_POPUP, (UINT_PTR)hEllipse, "Ellipse");
+    
+    HMENU hPolygon = CreatePopupMenu();
+    AppendMenu(hPolygon, MF_STRING, MENU_POLYGON, "Polygon");
+    AppendMenu(hPolygon, MF_STRING, MENU_SQUARE, "Square");
+    AppendMenu(hPolygon, MF_STRING, MENU_RECTANGLE, "Rectangle");
+    AppendMenu(hShapes, MF_POPUP, (UINT_PTR)hPolygon, "Polygon");
+    
+    HMENU hCurve = CreatePopupMenu();
+    AppendMenu(hCurve, MF_STRING, MENU_CURVE_CARDINAL, "Cardinal Spline");
+    AppendMenu(hCurve, MF_STRING, MENU_CURVE_BEZIER, "Bezier");
+    AppendMenu(hCurve, MF_STRING, MENU_CURVE_HERMITE, "Hermite");
+    AppendMenu(hShapes, MF_POPUP, (UINT_PTR)hCurve, "Curve");
+    
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hShapes, "Shapes");
 
     // Colors menu
-    HMENU hColorsMenu = CreatePopupMenu();
-    AppendMenu(hColorsMenu, MF_STRING, MENU_COLORS_BLACK, "Black");
-    AppendMenu(hColorsMenu, MF_STRING, MENU_COLORS_RED, "Red");
-    AppendMenu(hColorsMenu, MF_STRING, MENU_COLORS_GREEN, "Green");
-    AppendMenu(hColorsMenu, MF_STRING, MENU_COLORS_BLUE, "Blue");
-    AppendMenu(hColorsMenu, MF_STRING, MENU_COLORS_WHITE, "White");
-    AppendMenu(hColorsMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hColorsMenu, MF_STRING, MENU_COLORS_CUSTOM, "Custom Color...");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hColorsMenu, "Colors");
+    HMENU hColors = CreatePopupMenu();
+    AppendMenu(hColors, MF_STRING, MENU_COLOR_BLACK, "Black");
+    AppendMenu(hColors, MF_STRING, MENU_COLOR_RED, "Red");
+    AppendMenu(hColors, MF_STRING, MENU_COLOR_GREEN, "Green");
+    AppendMenu(hColors, MF_STRING, MENU_COLOR_BLUE, "Blue");
+    AppendMenu(hColors, MF_STRING, MENU_COLOR_WHITE, "White");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hColors, "Colors");
 
     // Fill menu
-    HMENU hFillMenu = CreatePopupMenu();
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_NONE, "None");
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_SOLID, "Solid");
-    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_LINES, "Circle Fill with Lines");
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_QUARTER, "Circle Fill Quarter");
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_CIRCLE_CIRCLES, "Circle Fill Solid");
-    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_SQUARE_HERMITE, "Square Fill with Hermite Curves");
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_RECTANGLE_BEZIER, "Rectangle Fill with Bezier Curves");
-    AppendMenu(hFillMenu, MF_SEPARATOR, 0, NULL);
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_CONVEX, "Convex Polygon Fill");
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_POLYGON_NONCONVEX, "Non-Convex Polygon Fill");
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_RECURSIVE, "Flood Fill Recursive");
-    AppendMenu(hFillMenu, MF_STRING, MENU_FILL_FLOOD_NONRECURSIVE, "Flood Fill Non-Recursive");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFillMenu, "Fill");    // Tools menu
-    HMENU hToolsMenu = CreatePopupMenu();
-    AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_CLEAR, "Clear Canvas\tCtrl+L");
-    AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_IN, "Zoom In\tCtrl+I");
-    AppendMenu(hToolsMenu, MF_STRING, MENU_TOOLS_ZOOM_OUT, "Zoom Out\tCtrl+O");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hToolsMenu, "Tools");
+    HMENU hFill = CreatePopupMenu();
+    AppendMenu(hFill, MF_STRING, MENU_FILL_NONE, "None");
+    AppendMenu(hFill, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFill, MF_STRING, MENU_FILL_CIRCLE_LINES, "Circle - Lines");
+    AppendMenu(hFill, MF_STRING, MENU_FILL_CIRCLE_QUARTER, "Circle - Quarter");
+    AppendMenu(hFill, MF_STRING, MENU_FILL_CIRCLE_CIRCLES, "Circle - Solid");
+    AppendMenu(hFill, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFill, MF_STRING, MENU_FILL_SQUARE_HERMITE, "Square - Hermite");
+    AppendMenu(hFill, MF_STRING, MENU_FILL_RECTANGLE_BEZIER, "Rectangle - Bezier");
+    AppendMenu(hFill, MF_SEPARATOR, 0, NULL);
+    AppendMenu(hFill, MF_STRING, MENU_FILL_POLYGON_CONVEX, "Polygon - Convex");
+    AppendMenu(hFill, MF_STRING, MENU_FILL_POLYGON_NONCONVEX, "Polygon - Non-Convex");
+    AppendMenu(hFill, MF_STRING, MENU_FILL_FLOOD_RECURSIVE, "Flood Fill - Recursive");
+    AppendMenu(hFill, MF_STRING, MENU_FILL_FLOOD_NONRECURSIVE, "Flood Fill - Non-Recursive");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hFill, "Fill");
+
+    // Tools menu
+    HMENU hTools = CreatePopupMenu();
+    AppendMenu(hTools, MF_STRING, MENU_TOOLS_CLEAR, "Clear Canvas\tCtrl+L");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hTools, "Tools");
 
     // Cursor menu
-    HMENU hCursorMenu = CreatePopupMenu();
-    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_ARROW, "Arrow");
-    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_HAND, "Hand");
-    AppendMenu(hCursorMenu, MF_STRING, MENU_CURSOR_CROSSHAIR, "Crosshair");
-    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hCursorMenu, "Cursor");
+    HMENU hCursor = CreatePopupMenu();
+    AppendMenu(hCursor, MF_STRING, MENU_CURSOR_ARROW, "Arrow");
+    AppendMenu(hCursor, MF_STRING, MENU_CURSOR_HAND, "Hand");
+    AppendMenu(hCursor, MF_STRING, MENU_CURSOR_CROSSHAIR, "Crosshair");
+    AppendMenu(m_hMenuBar, MF_POPUP, (UINT_PTR)hCursor, "Cursor");
 
     SetMenu(m_hwnd, m_hMenuBar);
 }
@@ -512,21 +514,22 @@ LRESULT GraphicsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             if (m_fillMode) {
                 if (m_currentFillMode == FillMode::POLYGON_CONVEX_FILL || 
                     m_currentFillMode == FillMode::POLYGON_NONCONVEX_FILL) {
-                    TextOut(hdc, 10, 10, "POLYGON FILL: Click near existing polygon to fill it", 50);
-                } else                if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
+                    TextOut(hdc, 10, 10, "POLYGON FILL: Click near existing polygon to fill it", 53);
+                } else if (m_currentFillMode == FillMode::FLOOD_FILL_RECURSIVE_POLYGON || 
                            m_currentFillMode == FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON) {
-                    TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 42);                } else if (m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
-                    TextOut(hdc, 10, 10, "SQUARE HERMITE FILL: Click inside a square to fill it | Right click to cancel", 75);
+                    TextOut(hdc, 10, 10, "FLOOD FILL MODE: Click inside area to fill", 43);
+                } else if (m_currentFillMode == FillMode::SQUARE_FILL_HERMITE_VERTICAL) {
+                    TextOut(hdc, 10, 10, "SQUARE HERMITE FILL: Click inside a square to fill it | Right click to cancel", 78);
                 } else if (m_currentFillMode == FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL) {
-                    TextOut(hdc, 10, 10, "RECTANGLE BEZIER FILL: Click inside a rectangle to fill it | Right click to cancel", 80);
+                    TextOut(hdc, 10, 10, "RECTANGLE BEZIER FILL: Click inside a rectangle to fill it | Right click to cancel", 84);
                 } else {
-                    TextOut(hdc, 10, 10, "FILL MODE: Click inside a circle to fill it | Right click to cancel", 65);
+                    TextOut(hdc, 10, 10, "FILL MODE: Click inside a circle to fill it | Right click to cancel", 68);
                 }
             } else {
                 if (m_currentDrawingMode == DrawingMode::POLYGON) {
-                    TextOut(hdc, 10, 10, "POLYGON MODE: Left click to add points | Right click to finish", 61);
+                    TextOut(hdc, 10, 10, "POLYGON MODE: Left click to add points | Right click to finish", 63);
                 } else {
-                    TextOut(hdc, 10, 10, "Left click to draw shapes | Right click to finish/cancel", 55);
+                    TextOut(hdc, 10, 10, "Left click to draw shapes | Right click to finish/cancel", 57);
                 }
             }
 
@@ -623,7 +626,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             Shape shape;
             shape.mode = m_currentDrawingMode;
             shape.color = m_currentColor;
-            shape.fillMode = m_currentFillMode;
+            shape.fillMode = FillMode::NONE;  // Always create shapes empty
             shape.points = m_currentPoints;
             shape.thickness = m_lineThickness;
             m_shapes.push_back(shape);
@@ -636,7 +639,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             Shape shape;
             shape.mode = m_currentDrawingMode;
             shape.color = m_currentColor;
-            shape.fillMode = m_currentFillMode;
+            shape.fillMode = FillMode::NONE;  // Always create shapes empty
             shape.points = m_currentPoints;
             shape.thickness = m_lineThickness;
             m_shapes.push_back(shape);
@@ -649,7 +652,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
             Shape shape;
             shape.mode = m_currentDrawingMode;
             shape.color = m_currentColor;
-            shape.fillMode = m_currentFillMode;
+            shape.fillMode = FillMode::NONE;  // Always create shapes empty
             shape.points = m_currentPoints;
             shape.thickness = m_lineThickness;
             m_shapes.push_back(shape);
@@ -687,6 +690,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                     
                     if (inside) {
                         shape.fillMode = m_currentFillMode;
+                        shape.color = m_currentColor;  // Use current color for fill
                         RebuildOffscreenBuffer();
                         InvalidateRect(m_hwnd, NULL, TRUE);
                         return;
@@ -726,8 +730,9 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 
                 // Check if click point is inside this circle
                 if (IsPointInCircle(x, y, shape.points[0].x, shape.points[0].y, radius)) {
-                    // Update the shape's fill mode
+                    // Update the shape's fill mode and color
                     shape.fillMode = m_currentFillMode;
+                    shape.color = m_currentColor;  // Use current color for fill
                     
                     // Rebuild buffer to ensure proper rendering with fills
                     RebuildOffscreenBuffer();
@@ -752,8 +757,9 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 // Check if click point is inside this square
                 if (x >= centerX - halfSize && x <= centerX + halfSize &&
                     y >= centerY - halfSize && y <= centerY + halfSize) {
-                    // Update the shape's fill mode
+                    // Update the shape's fill mode and color
                     shape.fillMode = m_currentFillMode;
+                    shape.color = m_currentColor;  // Use current color for fill
                     
                     // Rebuild buffer to ensure proper rendering with fills
                     RebuildOffscreenBuffer();
@@ -783,8 +789,9 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 
                 // Check if click point is inside this rectangle
                 if (x >= left && x <= right && y >= top && y <= bottom) {
-                    // Update the shape's fill mode
+                    // Update the shape's fill mode and color
                     shape.fillMode = m_currentFillMode;
+                    shape.color = m_currentColor;  // Use current color for fill
                     
                     // Rebuild buffer to ensure proper rendering with fills
                     RebuildOffscreenBuffer();
@@ -794,7 +801,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 }
             }
         }
-        return; // In fill mode but didn't click inside any circle
+        return; // In fill mode but didn't click inside any shape
     }
 
     // Normal drawing mode - add point or complete shape
@@ -815,7 +822,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 Shape shape;
                 shape.mode = m_currentDrawingMode;
                 shape.color = m_currentColor;
-                shape.fillMode = m_currentFillMode;
+                shape.fillMode = FillMode::NONE;  // Always create shapes empty
                 shape.points = m_currentPoints;
                 shape.thickness = m_lineThickness;
                 m_shapes.push_back(shape);
@@ -848,7 +855,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 Shape shape;
                 shape.mode = m_currentDrawingMode;
                 shape.color = m_currentColor;
-                shape.fillMode = m_currentFillMode;
+                shape.fillMode = FillMode::NONE;  // Always create shapes empty
                 shape.points = m_currentPoints;
                 shape.thickness = m_lineThickness;
                 m_shapes.push_back(shape);
@@ -879,7 +886,7 @@ void GraphicsWindow::HandleMouseClick(int x, int y, bool isLeftButton) {
                 Shape shape;
                 shape.mode = m_currentDrawingMode;
                 shape.color = m_currentColor;
-                shape.fillMode = m_currentFillMode;
+                shape.fillMode = FillMode::NONE;  // Always create shapes empty
                 shape.points = m_currentPoints;
                 shape.thickness = m_lineThickness;
                 m_shapes.push_back(shape);
@@ -1014,158 +1021,67 @@ void GraphicsWindow::HandleMouseMove(int x, int y) {
     }
 }
 
-// Handle menu command
 void GraphicsWindow::HandleMenuCommand(WPARAM wParam) {
     switch (LOWORD(wParam)) {
-        case MENU_FILE_NEW:
-            ClearCanvas();
-            break;
+        // File operations
+        case MENU_FILE_NEW:     ClearCanvas(); break;
+        case MENU_FILE_SAVE:    SaveToFile(); break;
+        case MENU_FILE_LOAD:    LoadFromFile(); break;
+        case MENU_FILE_EXIT:    PostMessage(m_hwnd, WM_CLOSE, 0, 0); break;
 
-        case MENU_FILE_EXIT:
-            PostMessage(m_hwnd, WM_CLOSE, 0, 0);
-            break;
+        // Line modes
+        case MENU_LINE_DDA:        SetDrawingMode(DrawingMode::LINE_DDA); break;
+        case MENU_LINE_BRESENHAM:  SetDrawingMode(DrawingMode::LINE_BRESENHAM); break;
+        case MENU_LINE_PARAMETRIC: SetDrawingMode(DrawingMode::LINE_PARAMETRIC); break;
 
-        case MENU_SHAPES_LINE_DDA:
-            SetDrawingMode(DrawingMode::LINE_DDA);
-            break;
+        // Circle modes
+        case MENU_CIRCLE_DIRECT:    SetDrawingMode(DrawingMode::CIRCLE_DIRECT); break;
+        case MENU_CIRCLE_POLAR:     SetDrawingMode(DrawingMode::CIRCLE_POLAR); break;
+        case MENU_CIRCLE_ITERATIVE: SetDrawingMode(DrawingMode::CIRCLE_ITERATIVE_POLAR); break;
+        case MENU_CIRCLE_MIDPOINT:  SetDrawingMode(DrawingMode::CIRCLE_MIDPOINT); break;
+        case MENU_CIRCLE_MODIFIED:  SetDrawingMode(DrawingMode::CIRCLE_MODIFIED_MIDPOINT); break;
 
-        case MENU_SHAPES_LINE_BRESENHAM:
-            SetDrawingMode(DrawingMode::LINE_BRESENHAM);
-            break;
+        // Ellipse modes
+        case MENU_ELLIPSE_DIRECT:   SetDrawingMode(DrawingMode::ELLIPSE_DIRECT); break;
+        case MENU_ELLIPSE_POLAR:    SetDrawingMode(DrawingMode::ELLIPSE_POLAR); break;
+        case MENU_ELLIPSE_MIDPOINT: SetDrawingMode(DrawingMode::ELLIPSE_MIDPOINT); break;
 
-        case MENU_SHAPES_LINE_PARAMETRIC:
-            SetDrawingMode(DrawingMode::LINE_PARAMETRIC);
-            break;
+        // Polygon modes
+        case MENU_POLYGON:   SetDrawingMode(DrawingMode::POLYGON); break;
+        case MENU_SQUARE:    SetDrawingMode(DrawingMode::SQUARE); break;
+        case MENU_RECTANGLE: SetDrawingMode(DrawingMode::RECTANGLE); break;
 
-        case MENU_SHAPES_CIRCLE_DIRECT:
-            SetDrawingMode(DrawingMode::CIRCLE_DIRECT);
-            break;
+        // Curve modes
+        case MENU_CURVE_CARDINAL: SetDrawingMode(DrawingMode::CURVE_CARDINAL); break;
+        case MENU_CURVE_BEZIER:   SetDrawingMode(DrawingMode::CURVE_BEZIER); break;
+        case MENU_CURVE_HERMITE:  SetDrawingMode(DrawingMode::CURVE_HERMITE); break;
 
-        case MENU_SHAPES_CIRCLE_POLAR:
-            SetDrawingMode(DrawingMode::CIRCLE_POLAR);
-            break;
+        // Colors
+        case MENU_COLOR_BLACK: SetDrawingColor(RGB(0, 0, 0)); break;
+        case MENU_COLOR_RED:   SetDrawingColor(RGB(255, 0, 0)); break;
+        case MENU_COLOR_GREEN: SetDrawingColor(RGB(0, 255, 0)); break;
+        case MENU_COLOR_BLUE:  SetDrawingColor(RGB(0, 0, 255)); break;
+        case MENU_COLOR_WHITE: SetDrawingColor(RGB(255, 255, 255)); break;
 
-        case MENU_SHAPES_CIRCLE_ITERATIVE:
-            SetDrawingMode(DrawingMode::CIRCLE_ITERATIVE_POLAR);
-            break;
+        // Fill modes
+        case MENU_FILL_NONE:                SetFillMode(FillMode::NONE); break;
+        case MENU_FILL_CIRCLE_LINES:        SetFillMode(FillMode::CIRCLE_FILL_LINES); break;
+        case MENU_FILL_CIRCLE_QUARTER:      SetFillMode(FillMode::CIRCLE_FILL_QUARTER); break;
+        case MENU_FILL_CIRCLE_CIRCLES:      SetFillMode(FillMode::CIRCLE_FILL_CIRCLES); break;
+        case MENU_FILL_POLYGON_CONVEX:      SetFillMode(FillMode::POLYGON_CONVEX_FILL); break;
+        case MENU_FILL_POLYGON_NONCONVEX:   SetFillMode(FillMode::POLYGON_NONCONVEX_FILL); break;
+        case MENU_FILL_FLOOD_RECURSIVE:     SetFillMode(FillMode::FLOOD_FILL_RECURSIVE_POLYGON); break;
+        case MENU_FILL_FLOOD_NONRECURSIVE:  SetFillMode(FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON); break;
+        case MENU_FILL_SQUARE_HERMITE:      SetFillMode(FillMode::SQUARE_FILL_HERMITE_VERTICAL); break;
+        case MENU_FILL_RECTANGLE_BEZIER:    SetFillMode(FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL); break;
 
-        case MENU_SHAPES_CIRCLE_MIDPOINT:
-            SetDrawingMode(DrawingMode::CIRCLE_MIDPOINT);
-            break;
+        // Tools
+        case MENU_TOOLS_CLEAR: ClearCanvas(); break;
 
-        case MENU_SHAPES_CIRCLE_MODIFIED:
-            SetDrawingMode(DrawingMode::CIRCLE_MODIFIED_MIDPOINT);
-            break;
-
-        case MENU_SHAPES_ELLIPSE_DIRECT:
-            SetDrawingMode(DrawingMode::ELLIPSE_DIRECT);
-            break;
-
-        case MENU_SHAPES_ELLIPSE_POLAR:
-            SetDrawingMode(DrawingMode::ELLIPSE_POLAR);
-            break;
-
-        case MENU_SHAPES_ELLIPSE_MIDPOINT:
-            SetDrawingMode(DrawingMode::ELLIPSE_MIDPOINT);
-            break;        case MENU_SHAPES_POLYGON:
-            SetDrawingMode(DrawingMode::POLYGON);
-            break;        case MENU_SHAPES_SQUARE:
-            SetDrawingMode(DrawingMode::SQUARE);
-            break;        case MENU_SHAPES_RECTANGLE:
-            SetDrawingMode(DrawingMode::RECTANGLE);
-            break;        case MENU_SHAPES_CARDINAL_SPLINE:
-            SetDrawingMode(DrawingMode::CURVE_CARDINAL);
-            break;
-
-        case MENU_SHAPES_BEZIER_CURVE:
-            SetDrawingMode(DrawingMode::CURVE_BEZIER);
-            break;
-
-        case MENU_SHAPES_HERMITE_CURVE:
-            SetDrawingMode(DrawingMode::CURVE_HERMITE);
-            break;
-
-        case MENU_COLORS_BLACK:
-            SetDrawingColor(RGB(0, 0, 0));
-            break;
-
-        case MENU_COLORS_RED:
-            SetDrawingColor(RGB(255, 0, 0));
-            break;
-
-        case MENU_COLORS_GREEN:
-            SetDrawingColor(RGB(0, 255, 0));
-            break;
-
-        case MENU_COLORS_BLUE:
-            SetDrawingColor(RGB(0, 0, 255));
-            break;
-
-        case MENU_COLORS_WHITE:
-            SetDrawingColor(RGB(255, 255, 255));
-            break;        case MENU_TOOLS_CLEAR:
-            ClearCanvas();
-            break;
-
-        case MENU_CURSOR_ARROW:
-            SetMouseCursor(LoadCursor(NULL, IDC_ARROW));
-            break;
-
-        case MENU_CURSOR_HAND:
-            SetMouseCursor(LoadCursor(NULL, IDC_HAND));
-            break;
-
-        case MENU_CURSOR_CROSSHAIR:
-            SetMouseCursor(LoadCursor(NULL, IDC_CROSS));
-            break;
-
-        case MENU_FILL_NONE:
-            SetFillMode(FillMode::NONE);
-            break;
-
-        case MENU_FILL_SOLID:
-            SetFillMode(FillMode::SOLID);
-            break;
-
-        case MENU_FILL_CIRCLE_LINES:
-            SetFillMode(FillMode::CIRCLE_FILL_LINES);
-            break;
-
-        case MENU_FILL_CIRCLE_QUARTER:
-            SetFillMode(FillMode::CIRCLE_FILL_QUARTER);
-            break;
-
-        case MENU_FILL_CIRCLE_CIRCLES:
-            SetFillMode(FillMode::CIRCLE_FILL_CIRCLES);
-            break;
-
-        case MENU_FILL_POLYGON_CONVEX:
-            SetFillMode(FillMode::POLYGON_CONVEX_FILL);
-            break;
-
-        case MENU_FILL_POLYGON_NONCONVEX:
-            SetFillMode(FillMode::POLYGON_NONCONVEX_FILL);
-            break;
-
-        case MENU_FILL_FLOOD_RECURSIVE:
-            SetFillMode(FillMode::FLOOD_FILL_RECURSIVE_POLYGON);
-            break;        case MENU_FILL_FLOOD_NONRECURSIVE:
-            SetFillMode(FillMode::FLOOD_FILL_NONRECURSIVE_POLYGON);
-            break;        case MENU_FILL_SQUARE_HERMITE:
-            SetFillMode(FillMode::SQUARE_FILL_HERMITE_VERTICAL);
-            break;
-
-        case MENU_FILL_RECTANGLE_BEZIER:
-            SetFillMode(FillMode::RECTANGLE_FILL_BEZIER_HORIZONTAL);
-            break;
-
-        case MENU_FILE_SAVE:
-            SaveToFile();
-            break;
-        
-        case MENU_FILE_LOAD:
-            LoadFromFile();
-            break;
+        // Cursors
+        case MENU_CURSOR_ARROW:     SetMouseCursor(LoadCursor(NULL, IDC_ARROW)); break;
+        case MENU_CURSOR_HAND:      SetMouseCursor(LoadCursor(NULL, IDC_HAND)); break;
+        case MENU_CURSOR_CROSSHAIR: SetMouseCursor(LoadCursor(NULL, IDC_CROSS)); break;
     }
 }
 
