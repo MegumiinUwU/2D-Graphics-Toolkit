@@ -1,169 +1,313 @@
-# 2D-Graphics-Project
+# 2D Graphics Toolkit
 
-# 2D Drawing Program Project
+A comprehensive Windows-based 2D graphics application implementing various computer graphics algorithms for drawing lines, circles, ellipses, polygons, curves, and filling shapes. Built using the Windows API (Win32) and C++.
 
-This document outlines the tasks required to implement a 2D drawing program in C++. Use the checkboxes below to track your progress through the development phases.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Language](https://img.shields.io/badge/language-C%2B%2B-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey.svg)
 
----
+## 📋 Table of Contents
 
-## Phase 1: Core Functionality & Window Setup 🖱️
+- [Features](#features)
+- [Implemented Algorithms](#implemented-algorithms)
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Building the Project](#building-the-project)
+- [Usage](#usage)
+- [Extending the Project](#extending-the-project)
+- [License](#license)
 
-This phase focuses on setting up the basic window and user interaction.
+## ✨ Features
 
-- [x] **Task 1: Create Window & Set Background**
-    - Create a window for your drawing program.
-    - Implement a function to set the background color to white.
-    - *Integration:* This forms the canvas for all subsequent drawing operations.
+- **Interactive Drawing Interface**: Point-and-click interface for drawing various shapes
+- **Multiple Algorithm Implementations**: Each shape type has multiple algorithm implementations
+- **Real-time Preview**: See shapes as you draw them
+- **Color Selection**: Choose from multiple colors for drawing
+- **Fill Operations**: Various fill algorithms including flood fill and scanline fill
+- **File I/O**: Save and load your drawings
+- **Curve Support**: Bezier, Hermite, and Cardinal Spline curves
+- **Optimized Rendering**: Double-buffered drawing for smooth performance
 
-- [x] **Task 2: Customize Mouse Cursor**
-    - Research and implement a method to change the default mouse cursor shape.
+## 🎨 Implemented Algorithms
 
-- [ ] **Task 3: Implement Mouse-Only Interaction**
-    - Set up event handling for mouse clicks and movement.
-    - Ensure all primary user actions rely on mouse inputs.
+### Line Drawing Algorithms
+- **DDA (Digital Differential Analyzer)** - Simple incremental line drawing
+- **Bresenham's Line Algorithm** - Integer-based efficient line drawing
+- **Parametric Line** - Parametric equation-based line drawing
+- **Horizontal Line** - Optimized horizontal line drawing
 
-- [ ] **Task 4: Console & Window Integration (Optional)**
-    - Investigate having both a graphical window and a console running.
-    - Use the console for debugging, status updates, etc.
+### Circle Drawing Algorithms
+- **Direct Circle** - Mathematical circle using direct equation
+- **Polar Circle** - Polar coordinate-based circle
+- **Iterative Polar Circle** - Optimized polar circle
+- **Midpoint Circle (Bresenham)** - Efficient integer-based circle
+- **Modified Midpoint Circle** - Enhanced midpoint algorithm
 
----
+### Ellipse Drawing Algorithms
+- **Direct Ellipse** - Direct mathematical ellipse
+- **Polar Ellipse** - Polar coordinate ellipse
+- **Bresenham's Ellipse (Midpoint)** - Integer-based efficient ellipse
 
-## Phase 2: Menus & Basic Drawing Management 🎨
+### Polygon Drawing
+- **General Polygon** - N-sided polygon with Bresenham lines
+- **Rectangle** - Axis-aligned rectangle
+- **Square** - Equal-sided rectangle
 
-This phase focuses on creating the user interface for selecting options.
+### Curve Drawing
+- **Bezier Curves** - Smooth parametric curves
+- **Hermite Curves** - Tangent-based smooth curves
+- **Cardinal Splines** - Interpolating spline curves
 
-- [ ] **Task 5: Implement Drop-Down Menus**
-    - Design and implement a menu bar with drop-down lists.
-    - Populate menus with placeholders (File, Shapes, Colors, etc.).
-    - *Integration:* This will be the primary way users access features.
+### Fill Algorithms
+- **Circle Fills**:
+  - Fill with horizontal lines
+  - Quarter circle fill
+  - Concentric circles fill
+  
+- **Polygon Fills**:
+  - Convex polygon scanline fill
+  - Non-convex polygon scanline fill
+  
+- **Flood Fill**:
+  - Recursive flood fill
+  - Non-recursive (iterative) flood fill
+  
+- **Special Fills**:
+  - Fill rectangle with horizontal Bezier curves
+  - Fill square with vertical Hermite curves
 
-- [ ] **Task 6: Color Selection Menu**
-    - Add a "Colors" menu item.
-    - Implement a sub-menu/dialog for choosing drawing colors.
-    - Store the selected color.
-    - *Integration:* The chosen color will be used by all drawing functions.
+## 📁 Project Structure
 
-- [ ] **Task 7: Implement Clear Screen Functionality**
-    - Add a "Clear" or "New" option.
-    - Implement a function to erase all shapes and reset the window.
-    - *Integration:* Provides a way to start a new drawing.
+```
+2D-Graphics-Project/
+├── include/                      # Header files
+│   ├── Bezier.h                 # Bezier curve declarations
+│   ├── CardinalSpline.h         # Cardinal spline declarations
+│   ├── CircleAlgorithms.h       # Circle drawing algorithms
+│   ├── CircleFillAlgorithms.h   # Circle filling algorithms
+│   ├── EllipseAlgorithms.h      # Ellipse drawing algorithms
+│   ├── FloodFill.h              # Flood fill algorithms
+│   ├── GraphicsTypes.h          # Common types and enums
+│   ├── Hermite.h                # Hermite curve declarations
+│   ├── LineAlgorithms.h         # Line drawing algorithms
+│   ├── Point.h                  # Point structure
+│   ├── PolygonAlgorithms.h      # Polygon drawing algorithms
+│   ├── PolygonFillAlgorithms.h  # Polygon fill algorithms
+│   ├── Utils.h                  # Utility functions
+│   └── Window.h                 # Main window and graphics framework
+│
+├── src/                         # Implementation files
+│   ├── circle/                  # Circle algorithm implementations
+│   │   ├── DirectCircle.cpp
+│   │   ├── IterativePolarCircle.cpp
+│   │   ├── MidpointCircle.cpp
+│   │   ├── ModifiedMidpointCircle.cpp
+│   │   └── PolarCircle.cpp
+│   │
+│   ├── circle fill/             # Circle fill implementations
+│   │   ├── FillCircleWithCircles.cpp
+│   │   ├── FillCircleWithLines.cpp
+│   │   └── FillQuarterCircle.cpp
+│   │
+│   ├── curve/                   # Curve implementations
+│   │   ├── Bezier.cpp
+│   │   ├── CardinalSpline.cpp
+│   │   └── Hermite.cpp
+│   │
+│   ├── elipse/                  # Ellipse implementations
+│   │   ├── BresenhamElipse.cpp
+│   │   ├── DirectElipse.cpp
+│   │   └── PolarElipse.cpp
+│   │
+│   ├── flood fill/              # Flood fill implementations
+│   │   ├── NonRecursiveFloodFIll.cpp
+│   │   └── RecursiveFloodFill.cpp
+│   │
+│   ├── line/                    # Line algorithm implementations
+│   │   ├── BresenhamLine.cpp
+│   │   ├── BresenhamPolygonLine.cpp
+│   │   ├── DDALine.cpp
+│   │   ├── HorizontalLine.cpp
+│   │   └── ParametricLine.cpp
+│   │
+│   ├── polygon/                 # Polygon implementations
+│   │   ├── Polygon.cpp
+│   │   ├── Rectangle.cpp
+│   │   └── Square.cpp
+│   │
+│   ├── polygon fill/            # Polygon fill implementations
+│   │   ├── ConvexFIll.cpp
+│   │   ├── FillRectangleWithHorizontalBezier.cpp
+│   │   ├── FillSquareWithVerticalHermite.cpp
+│   │   └── NonConvexFill.cpp
+│   │
+│   └── window/                  # Window management implementations
+│       ├── Buffer.cpp           # Offscreen buffer management
+│       ├── Draw.cpp             # Drawing coordination
+│       ├── File.cpp             # File I/O operations
+│       ├── Menu.cpp             # Menu handling
+│       ├── Mouse.cpp            # Mouse event handling
+│       └── Window.cpp           # Main window implementation
+│
+├── docs/                        # Documentation
+│   └── Documentation.md         # Detailed framework documentation
+│
+├── cmake-build-debug/           # CMake build files (generated)
+├── CMakeLists.txt              # CMake build configuration
+├── main.cpp                    # Application entry point
+├── LICENSE                     # License file
+└── README.md                   # This file
+```
 
-- [ ] **Task 8: Implement Save Functionality**
-    - Add a "Save" option.
-    - Design a file format to store shape data.
-    - Implement code to write data to a file.
-    - *Integration:* Allows users to preserve their work.
+## 💻 Requirements
 
-- [ ] **Task 9: Implement Load Functionality**
-    - Add a "Load" option.
-    - Implement code to read the save file format.
-    - Re-draw shapes based on loaded data.
-    - *Integration:* Enables users to continue working on previous drawings.
+### Software Requirements
+- **Operating System**: Windows 7 or later
+- **Compiler**: 
+  - MSVC (Visual Studio 2017 or later)
+  - MinGW-w64 (GCC 7.0 or later)
+  - Clang for Windows
+- **Build System**: CMake 3.31 or later
+- **IDE** (Optional but recommended):
+  - CLion
+  - Visual Studio
+  - VS Code with C++ extensions
 
----
+### Libraries
+- Windows API (Win32) - Pre-installed with Windows SDK
+- Standard C++ Library (C++17)
 
-## Phase 3: Line & Circle Drawing Algorithms ✍️
+## 🔨 Building the Project
 
-This phase focuses on implementing the fundamental shape drawing algorithms.
+### Using CMake (Command Line)
 
-- [x] **Task 10: Implement DDA Line Algorithm**
-    - Create a function to draw a line using the DDA algorithm.
+1. **Clone the repository**:
+```bash
+git clone https://github.com/Hemdan47/2D-Graphics-Project.git
+cd 2D-Graphics-Project
+```
 
-- [x] **Task 11: Implement Midpoint Line Algorithm**
-    - Create a function to draw a line using the Midpoint line algorithm.
+2. **Create build directory**:
+```bash
+mkdir build
+cd build
+```
 
-- [x] **Task 12: Implement Parametric Line Algorithm**
-    - Create a function to draw a line using a parametric equation.
+3. **Generate build files**:
+```bash
+cmake ..
+```
 
-- [x] **Task 13: Implement Direct Circle Algorithm**
-    - Create a function to draw a circle using the direct method.
+4. **Build the project**:
+```bash
+cmake --build . --config Release
+```
 
-- [x] **Task 14: Implement Polar Circle Algorithm**
-    - Create a function to draw a circle using polar coordinates.
+5. **Run the executable**:
+```bash
+./Release/2D-Graphics-Project.exe
+```
 
-- [x] **Task 15: Implement Iterative Polar Circle Algorithm**
-    - Create a function to draw a circle using an iterative polar approach.
+### Using CLion
 
-- [x] **Task 16: Implement Midpoint Circle Algorithm**
-    - Create a function to draw a circle using the Midpoint circle algorithm.
+1. Open CLion
+2. Select **File → Open** and choose the project directory
+3. CLion will automatically detect CMakeLists.txt
+4. Click the **Build** button (hammer icon) or press `Ctrl+F9`
+5. Click **Run** (play icon) or press `Shift+F10`
 
-- [x] **Task 17: Implement Modified Midpoint Circle Algorithm**
-    - Create a function to draw a circle using a modified Midpoint circle algorithm.
+### Using Visual Studio
 
-- [x] **Task 18: Implement Ellipse Direct Algorithm**
-    - Create a function to draw an ellipse using the direct method.
+1. Open Visual Studio
+2. Select **File → Open → CMake**
+3. Choose the `CMakeLists.txt` file
+4. Wait for CMake to configure
+5. Select **Build → Build All** or press `Ctrl+Shift+B`
+6. Run with **Debug → Start Without Debugging** or press `Ctrl+F5`
 
-- [x] **Task 19: Implement Ellipse Polar Algorithm**
-    - Create a function to draw an ellipse using polar coordinates.
+## 🎮 Usage
 
-- [x] **Task 20: Implement Ellipse Midpoint Algorithm**
-    - Create a function to draw an ellipse using the Midpoint ellipse algorithm.
+### Basic Drawing
 
----
+1. **Launch the application** - A window will open with a menu bar
+2. **Select a drawing algorithm** from the **Shapes** menu:
+   - Choose from Lines, Circles, Ellipses, Polygons, or Curves
+3. **Click on the canvas** to define points:
+   - **Lines/Circles/Ellipses**: Click twice (start and end points)
+   - **Polygons**: Click multiple times, right-click to finish
+   - **Rectangles**: Click and drag
+4. **The shape appears** using the selected algorithm
 
-## Phase 4: Filling Algorithms ⬛
+### Selecting Colors
 
-This phase focuses on implementing various shape-filling techniques.
+1. Open the **Colors** menu
+2. Select from:
+   - Black
+   - Red
+   - Green
+   - Blue
+   - White
 
-- [x] **Task 21: Implement Circle Filling with Lines**
-    - Allow user to select a quarter of a circle.
+### Filling Shapes
 
-- [x] **Task 22: Implement Circle Filling with Circles**
-    - Allow user to select a quarter of a circle.
+1. Draw a closed shape (circle, polygon, etc.)
+2. Select a fill mode from the **Fill** menu
+3. Click inside the shape to fill it
 
-- [x] **Task 23: Implement Square Filling with Hermite Curve (Vertical)**
-    - Allow user to draw a square.
-    - Fill the square with vertical Hermite curves.
+### File Operations
 
-- [x] **Task 24: Implement Rectangle Filling with Bezier Curve (Horizontal)**
-    - Allow user to draw a rectangle.
-    - Fill the rectangle with horizontal Bezier curves.
+- **New Canvas**: File → New (clears current drawing)
+- **Save Drawing**: File → Save (saves to .bin file)
+- **Load Drawing**: File → Load (loads from .bin file)
 
-- [x] **Task 25: Implement Convex Filling Algorithm**
-    - Implement a scan-line filling algorithm for convex polygons.
+### Shape-Specific Instructions
 
-- [x] **Task 26: Implement Non-Convex Filling Algorithm**
-    - Implement a scan-line filling algorithm for non-convex polygons.
+#### Drawing a Line
+1. Shapes → Lines → Choose algorithm (DDA, Bresenham, or Parametric)
+2. Click for start point
+3. Click for end point
 
-- [x] **Task 27: Implement Recursive Flood Fill**
-    - Implement a recursive flood fill algorithm.
+#### Drawing a Circle
+1. Shapes → Circles → Choose algorithm
+2. Click for center point
+3. Click to define radius
 
-- [x] **Task 28: Implement Non-Recursive Flood Fill**
-    - Implement a non-recursive flood fill algorithm (stack/queue).
+#### Drawing an Ellipse
+1. Shapes → Ellipses → Choose algorithm
+2. Click for center point
+3. Click to define semi-major axis length
 
----
+#### Drawing a Polygon
+1. Shapes → Polygon
+2. Click to add vertices (as many as needed)
+3. Right-click to close polygon
 
-## Phase 5: Curves & Clipping ✂️
+#### Drawing Curves
+1. Shapes → Curves → Choose type (Bezier, Hermite, Cardinal)
+2. Click to add control points
+3. Right-click when done
 
-This phase focuses on more advanced drawing and manipulation techniques.
 
-- [x] **Task 29: Implement Cardinal Spline Curve**
-    - Allow user to input control points.
-    - Draw a Cardinal spline curve through these points.
-    - *Integration:* Adds smooth curve drawing capability.
+## 🔧 Extending the Project
 
-- [ ] **Task 30: Implement Point Clipping (Rectangle Window)**
-    - Allow user to define a rectangular clipping window.
-    - Determine if a point is inside or outside the window.
-    - *Integration:* The basic building block for line and polygon clipping.
+### Adding a New Drawing Algorithm
 
-- [ ] **Task 31: Implement Line Clipping (Rectangle Window)**
-    - Implement a line clipping algorithm against a rectangle.
+1. **Declare** function in appropriate header file (e.g., `LineAlgorithms.h`)
+2. **Implement** algorithm in corresponding source file
+3. **Add** menu constant in `GraphicsTypes.h`
+4. **Update** `DrawingMode` enum
+5. **Add** menu item in `Window.cpp` → `InitializeMenus()`
+6. **Handle** menu command in `HandleMenuCommand()`
+7. **Add** drawing case in `RedrawAll()` or `DrawShapeToBuffer()`
 
-- [ ] **Task 32: Implement Polygon Clipping (Rectangle Window)**
-    - Implement a polygon clipping algorithm against a rectangle.
+### Adding a New Shape Type
 
-- [ ] **Task 33: Implement Point Clipping (Square Window)**
-    - Adapt point clipping for a square window.
+1. Follow steps for adding algorithm above
+2. **Implement** mouse handling logic in `HandleMouseClick()`
+3. **Add** preview drawing in `HandleMouseMove()` if needed
 
-- [ ] **Task 34: Implement Line Clipping (Square Window)**
-    - Adapt line clipping for a square window.
 
-- [ ] **Task 35: Implement Point Clipping (Circle Window)**
-    - Implement point clipping against a circular window.
+## 📄 License
 
-- [ ] **Task 36: Implement Line Clipping (Circle Window)**
-    - Implement line clipping against a circular window (involves intersections).
-
----
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
