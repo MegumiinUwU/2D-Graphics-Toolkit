@@ -1,4 +1,4 @@
-#include "include/GraphicsWindow.h"
+#include "include/Window.h"
 #include <windows.h>
 
 // ========================================

@@ -37,4 +37,10 @@ add_executable(2D-Graphics-Project
         "src/polygon fill/NonConvexFill.cpp"
         "src/polygon fill/FillRectangleWithHorizontalBezier.cpp"
         "src/polygon fill/FillSquareWithVerticalHermite.cpp"
+        src/window/Window.cpp
+        src/window/Menu.cpp
+        src/window/Mouse.cpp
+        src/window/Draw.cpp
+        src/window/Buffer.cpp
+        src/window/File.cpp
 )
