@@ -3,7 +3,11 @@ project(2D-Graphics-Toolkit)
 
 set(CMAKE_CXX_STANDARD 17)
 
-add_executable(2D-Graphics-Toolkit
+# Prevent Windows.h from defining min/max macros that conflict with std::min/std::max
+add_compile_definitions(NOMINMAX)
+
+# Create Windows GUI application (not console)
+add_executable(2D-Graphics-Toolkit WIN32
         main.cpp
         src/line/BresenhamLine.cpp
         src/line/DDALine.cpp

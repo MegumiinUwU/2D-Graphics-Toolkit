@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <cmath>
+#include <algorithm>
 #include "../../include/EllipseAlgorithms.h"
 #include "../../include/Utils.h"
 

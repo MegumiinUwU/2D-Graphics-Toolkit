@@ -210,6 +210,11 @@ cmake --build . --config Release
 
 5. **Run the executable**:
 ```bash
+# From the build directory
+cd Release
+./2D-Graphics-Toolkit.exe
+
+# Or from the build directory directly
 ./Release/2D-Graphics-Toolkit.exe
 ```
 
