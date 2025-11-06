@@ -188,7 +188,7 @@ A comprehensive Windows-based 2D graphics application implementing various compu
 
 1. **Clone the repository**:
 ```bash
-git clone https://github.com/Hemdan47/2D-Graphics-Toolkit.git
+git clone https://github.com/MegumiinUwU/2D-Graphics-Project.git
 cd 2D-Graphics-Toolkit
 ```
 
